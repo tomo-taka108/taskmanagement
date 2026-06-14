@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KanbanBoard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== ヘッダー ===== -->
+  <header id="app-header">
+    <span id="app-title">KanbanBoard</span>
+
+    <div id="search-area">
+      <input type="search" id="search-input" placeholder="カードを検索...">
+    </div>
+
+    <div id="filter-area">
+      <select id="filter-label">
+        <option value="">ラベル: すべて</option>
+      </select>
+      <select id="filter-due">
+        <option value="">期限: すべて</option>
+        <option value="overdue">期限超過</option>
+        <option value="this-week">今週中</option>
+      </select>
+    </div>
+
+    <button id="theme-toggle" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
+  </header>
+
+  <!-- ===== メインボードエリア ===== -->
+  <main id="board">
+    <!-- カラムはJSで動的生成 -->
+    <div id="add-column-area">
+      <button id="add-column-btn">+ カラム追加</button>
+      <div id="add-column-form" class="hidden">
+        <input type="text" id="new-column-name" placeholder="カラム名を入力">
+        <button id="confirm-add-column">追加</button>
+        <button id="cancel-add-column" class="btn-secondary">キャンセル</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== カード詳細モーダル（S-02）===== -->
+  <div id="modal-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="modal-content">
+      <div id="modal-header">
+        <h2 id="modal-title" contenteditable="false" spellcheck="false" data-placeholder="タイトルを入力..."></h2>
+        <button id="modal-close" aria-label="閉じる">✕</button>
+      </div>
+
+      <div id="modal-body">
+        <section class="modal-section">
+          <label for="modal-desc">説明</label>
+          <textarea id="modal-desc" placeholder="説明を入力..."></textarea>
+        </section>
+
+        <section class="modal-section">
+          <label for="modal-due">期限日</label>
+          <div class="due-row">
+            <input type="date" id="modal-due">
+            <span id="modal-due-warning" class="hidden">🔴 期限超過</span>
+          </div>
+        </section>
+
+        <section class="modal-section">
+          <label>ラベル</label>
+          <div id="modal-labels">
+            <!-- JSで動的生成 -->
+          </div>
+        </section>
+
+        <section class="modal-section">
+          <label>チェックリスト</label>
+          <div id="modal-checklist-progress">
+            <span id="checklist-pct">0%</span>
+            <div id="checklist-bar-wrap">
+              <div id="checklist-bar"></div>
+            </div>
+          </div>
+          <ul id="checklist-list">
+            <!-- JSで動的生成 -->
+          </ul>
+          <div id="checklist-add">
+            <input type="text" id="new-checklist-item" placeholder="項目を追加...">
+            <button id="add-checklist-btn">追加</button>
+          </div>
+        </section>
+      </div>
+
+      <div id="modal-footer">
+        <button id="modal-delete" class="btn-danger">🗑️ カードを削除</button>
+        <div class="modal-footer-right">
+          <button id="modal-cancel" class="btn-secondary">キャンセル</button>
+          <button id="modal-save" class="btn-primary">保存して閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
