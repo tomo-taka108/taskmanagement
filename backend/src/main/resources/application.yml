@@ -7,9 +7,13 @@ spring:
     username: ${DB_USERNAME:taskuser}
     password: ${DB_PASSWORD:taskpass}
     driver-class-name: org.postgresql.Driver
+  sql:
+    init:
+      mode: always
   jpa:
     hibernate:
       ddl-auto: update
+    defer-datasource-initialization: true
     show-sql: true
     properties:
       hibernate:
