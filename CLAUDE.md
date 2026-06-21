@@ -96,3 +96,43 @@ gh pr create --title "feat: カードへのラベル設定機能を追加" --bas
 6. PRをマージする
 7. git branch -d feature/<ブランチ名> でローカルブランチを削除する
 ```
+
+---
+
+## 6. サーバー起動ルール（必須）
+
+このプロジェクトのサーバーは以下のポートで動作します。**別のポートへの変更は禁止です。**
+
+| サーバー | ポート | 備考 |
+|---|---|---|
+| バックエンド（Spring Boot） | `8080` | `application.yml` で固定 |
+| フロントエンド（Vite） | `5173` | Vite デフォルト。CORS設定で許可済み |
+
+### ポート競合時の対処（必ず守ること）
+
+サーバーを起動する前、または起動に失敗した場合は、**必ず指定ポートを占有しているプロセスを停止してから、同じポートで再起動する。**  
+別のポートで一時的に起動することは禁止。
+
+```bash
+# バックエンド（8080）が競合している場合
+# Windows
+netstat -ano | findstr :8080       # PIDを確認
+taskkill /PID <PID> /F             # プロセスを停止
+
+# Linux / macOS
+lsof -ti :8080 | xargs kill -9
+
+# フロントエンド（5173）が競合している場合
+# Windows
+netstat -ano | findstr :5173
+taskkill /PID <PID> /F
+
+# Linux / macOS
+lsof -ti :5173 | xargs kill -9
+```
+
+### 理由
+
+- バックエンドの CORS 設定（`WebConfig.java`）は `http://localhost:5173` のみ許可
+- フロントエンドの API クライアント（`api/client.ts`）は `http://localhost:8080` に固定
+- 別ポートで起動すると CORS エラーや API 接続エラーが発生し、動作確認が不可能になる
