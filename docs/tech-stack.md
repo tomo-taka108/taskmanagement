@@ -1,7 +1,8 @@
 # 技術スタック・制約条件
 
-**バージョン:** 0.1  
+**バージョン:** 0.2  
 **作成日:** 2026-06-13  
+**改訂日:** 2026-06-21  
 **作成者:** tomo-taka108
 
 ---
@@ -10,26 +11,27 @@
 
 ### フロントエンド
 
-| 区分 | 技術 |
-|------|------|
-| 言語 | TypeScript |
-| フレームワーク | React |
-| ビルドツール | Vite |
-| スタイリング | Tailwind CSS |
-| 状態管理 | Zustand |
-| ドラッグ&ドロップ | dnd-kit |
-| HTTPクライアント | Axios / Fetch API |
+| 区分 | 技術 | バージョン |
+|------|------|-----------|
+| 言語 | TypeScript | 6.0.2 |
+| フレームワーク | React | 19.2.6 |
+| ビルドツール | Vite | 8.0.12 |
+| スタイリング | Tailwind CSS | 4.3.1 |
+| 状態管理 | Zustand | 5.0.14 |
+| ドラッグ&ドロップ | dnd-kit | （実装時に追加予定） |
+| HTTPクライアント | Axios | 1.18.0 |
 
 ### バックエンド
 
-| 区分 | 技術 |
-|------|------|
-| 言語 | Java |
-| フレームワーク | Spring Boot |
-| APIスタイル | REST API |
-| DB | PostgreSQL |
-| ORM | Spring Data JPA / Hibernate |
-| ビルドツール | Gradle |
+| 区分 | 技術 | バージョン |
+|------|------|-----------|
+| 言語 | Java | 25 |
+| フレームワーク | Spring Boot | 4.0.7 |
+| APIスタイル | REST API | - |
+| DB | PostgreSQL | - |
+| ORM | Spring Data JPA / Hibernate | Spring Boot 4.0.7 同梱 |
+| ビルドツール | Gradle | - |
+| ユーティリティ | Lombok | Spring Boot 4.0.7 同梱 |
 
 ---
 
