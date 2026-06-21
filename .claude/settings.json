@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ \"$branch\" = \"main\" ]; then echo \"[RULE VIOLATION] CLAUDE.md のルール違反: main ブランチで直接ファイルを編集しようとしています。\n作業開始前チェックリストを確認してください:\n 1. gh issue create で Issue を作成する\n 2. git checkout -b feature/<Issue番号>-<内容> でブランチを切る\n 3. main ブランチへの直接コミットは禁止\" >&2; exit 2; fi'"
+          }
+        ]
+      }
+    ]
+  }
+}
