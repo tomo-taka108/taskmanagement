@@ -28,9 +28,9 @@
 | 言語 | Java | 25 |
 | フレームワーク | Spring Boot | 4.0.7 |
 | APIスタイル | REST API | - |
-| DB | PostgreSQL | - |
+| DB | PostgreSQL | 17 |
 | ORM | Spring Data JPA / Hibernate | Spring Boot 4.0.7 同梱 |
-| ビルドツール | Gradle | - |
+| ビルドツール | Gradle | 9.1.0 |
 | ユーティリティ | Lombok | Spring Boot 4.0.7 同梱 |
 
 ---
