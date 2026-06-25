@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { BoardColumnResponse, FilterState } from '../types/api';
-import { fetchColumns } from '../api/client';
+import type { BoardColumnResponse, CreateCardRequest, FilterState } from '../types/api';
+import { createCard, fetchColumns } from '../api/client';
 
 const initialFilter: FilterState = {
   keyword: '',
@@ -13,6 +13,7 @@ interface BoardStore {
   isLoading: boolean;
   error: string | null;
   loadBoard: () => Promise<void>;
+  addCard: (columnId: number, data: CreateCardRequest) => Promise<void>;
 
   filter: FilterState;
   setKeyword: (keyword: string) => void;
@@ -34,6 +35,15 @@ export const useBoardStore = create<BoardStore>((set) => ({
     } catch {
       set({ error: 'データの取得に失敗しました', isLoading: false });
     }
+  },
+
+  addCard: async (columnId, data) => {
+    const card = await createCard(columnId, data);
+    set((s) => ({
+      columns: s.columns.map((col) =>
+        col.id === columnId ? { ...col, cards: [...col.cards, card] } : col
+      ),
+    }));
   },
 
   filter: initialFilter,
