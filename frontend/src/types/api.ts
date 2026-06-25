@@ -33,6 +33,13 @@ export interface BoardColumnResponse {
   cards: CardResponse[];
 }
 
+export interface CreateCardRequest {
+  title: string;
+  description?: string;
+  priority?: Priority;
+  dueDate?: string;
+}
+
 export type DueFilter = '' | 'overdue' | 'this-week';
 
 export interface FilterState {
