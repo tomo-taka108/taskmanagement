@@ -11,12 +11,15 @@ export interface ChecklistItemResponse {
   position: number;
 }
 
+export type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
+
 export interface CardResponse {
   id: number;
   columnId: number;
   title: string;
   description: string | null;
   dueDate: string | null;
+  priority: Priority | null;
   color: string | null;
   position: number;
   checklistItems: ChecklistItemResponse[];

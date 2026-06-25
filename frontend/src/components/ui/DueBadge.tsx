@@ -21,16 +21,9 @@ export function DueBadge({ dueDate }: Props) {
     normal: 'text-[var(--color-text-sub)]',
   };
 
-  const icons = {
-    overdue: '🔴 ',
-    soon: '🟡 ',
-    normal: '📅 ',
-  };
-
   return (
     <span className={`text-xs ${styles[status]}`}>
-      {icons[status]}
-      {dueDate}
+      【期限】{dueDate}
     </span>
   );
 }

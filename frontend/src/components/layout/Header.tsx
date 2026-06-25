@@ -31,7 +31,7 @@ export function Header({ isDark, onThemeToggle }: Props) {
       className="flex items-center gap-3 px-4 py-3 shrink-0 flex-wrap"
       style={{ backgroundColor: 'var(--color-bg-header)' }}
     >
-      <span className="text-white font-bold text-lg mr-2">KanbanBoard</span>
+      <span className="text-white font-bold text-lg mr-2">TaskBoard</span>
 
       <SearchBar value={filter.keyword} onChange={setKeyword} />
       <LabelFilter labels={labels} value={filter.labelId} onChange={setLabelId} />

@@ -38,6 +38,10 @@ public class Card {
     @Column(name = "due_date")
     private LocalDate dueDate;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private Priority priority;
+
     @Column(length = 50)
     private String color;
 

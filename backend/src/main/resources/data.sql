@@ -3,9 +3,9 @@
 -- カラム
 INSERT INTO columns (title, position, created_at, updated_at)
 VALUES
-  ('TODO',       1, NOW(), NOW()),
-  ('進行中',     2, NOW(), NOW()),
-  ('完了',       3, NOW(), NOW())
+  ('未着手',   1, NOW(), NOW()),
+  ('作業中',   2, NOW(), NOW()),
+  ('完了',     3, NOW(), NOW())
 ON CONFLICT DO NOTHING;
 
 -- ラベル（プリセット）
@@ -17,32 +17,35 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- カード（column_id は上記 INSERT の順番依存のため subquery で取得）
-INSERT INTO cards (column_id, title, description, due_date, color, position, created_at, updated_at)
+INSERT INTO cards (column_id, title, description, due_date, priority, color, position, created_at, updated_at)
 VALUES
   (
-    (SELECT id FROM columns WHERE title = 'TODO' LIMIT 1),
+    (SELECT id FROM columns WHERE title = '未着手' LIMIT 1),
     'ログイン機能を実装する',
     'JWTを使ったログイン・ログアウト機能を実装する',
     '2026-07-01',
-    '#f1c40f',
+    'HIGH',
+    NULL,
     1,
     NOW(), NOW()
   ),
   (
-    (SELECT id FROM columns WHERE title = 'TODO' LIMIT 1),
+    (SELECT id FROM columns WHERE title = '未着手' LIMIT 1),
     'データベース設計を見直す',
     'Cardテーブルのインデックス設計を最適化する',
     NULL,
+    'MEDIUM',
     NULL,
     2,
     NOW(), NOW()
   ),
   (
-    (SELECT id FROM columns WHERE title = '進行中' LIMIT 1),
+    (SELECT id FROM columns WHERE title = '作業中' LIMIT 1),
     'カード一覧取得APIを実装する',
     'GET /api/columns でカラムとカードの一覧を返すエンドポイントを実装中',
     '2026-06-25',
-    '#3498db',
+    'HIGH',
+    NULL,
     1,
     NOW(), NOW()
   ),
@@ -51,7 +54,8 @@ VALUES
     'Docker環境を構築する',
     'PostgreSQL + Spring Boot の Docker Compose 環境を整備した',
     NULL,
-    '#2ecc71',
+    'LOW',
+    NULL,
     1,
     NOW(), NOW()
   )
