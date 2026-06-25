@@ -3,7 +3,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  closestCenter,
+  closestCorners,
   useSensor,
   useSensors,
   type DragStartEvent,
@@ -25,22 +25,27 @@ export function BoardView() {
   const [activeCard, setActiveCard] = useState<CardResponse | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardResponse | null>(null);
 
-  // ドラッグ開始時点のカラム状態を保存（キャンセル時の復元用）
-  const snapshotRef = useRef<typeof columns | null>(null);
+  // ドラッグ確定時にAPIへ送る情報を保持
+  const pendingMoveRef = useRef<{ cardId: number; targetColumnId: number; newPosition: number } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
-  const findColumnByCardId = (cardId: number) =>
-    columns.find((col) => col.cards.some((c) => c.id === cardId));
+  // カードIDからカラムIDを返す
+  const getColumnIdByCardId = (cardId: number): number | undefined =>
+    columns.find((col) => col.cards.some((c) => c.id === cardId))?.id;
+
+  // over.id がカラムIDかカードIDかを判定
+  const isColumnId = (id: number): boolean =>
+    columns.some((col) => col.id === id);
 
   const handleDragStart = (event: DragStartEvent) => {
-    const id = Number(event.active.id);
-    const col = findColumnByCardId(id);
-    const card = col?.cards.find((c) => c.id === id);
+    const activeId = Number(event.active.id);
+    const col = columns.find((c) => c.cards.some((card) => card.id === activeId));
+    const card = col?.cards.find((c) => c.id === activeId);
     if (card) setActiveCard(card);
-    snapshotRef.current = columns;
+    pendingMoveRef.current = null;
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -51,93 +56,86 @@ export function BoardView() {
     const overId = Number(over.id);
     if (activeId === overId) return;
 
-    const activeCol = findColumnByCardId(activeId);
-    if (!activeCol) return;
+    const activeColumnId = getColumnIdByCardId(activeId);
+    if (activeColumnId === undefined) return;
 
-    // over がカラム自体か、別カラムのカードかを判定
-    const overCol =
-      columns.find((c) => c.id === overId) ??       // over がカラム
-      findColumnByCardId(overId);                    // over がカード
+    // over がカラムか、カードかを判定してターゲットカラムIDを決める
+    const overColumnId = isColumnId(overId)
+      ? overId
+      : getColumnIdByCardId(overId);
+    if (overColumnId === undefined) return;
 
-    if (!overCol || activeCol.id === overCol.id) return;
-
-    // カラムをまたぐ場合だけここで楽観的更新
     setColumns((cols) => {
-      const activeCard = activeCol.cards.find((c) => c.id === activeId)!;
+      const activeCol = cols.find((c) => c.id === activeColumnId)!;
+      const overCol = cols.find((c) => c.id === overColumnId)!;
+
+      const activeSorted = [...activeCol.cards].sort((a, b) => a.position - b.position);
       const overSorted = [...overCol.cards].sort((a, b) => a.position - b.position);
 
-      // over がカードの場合はその位置に、カラムの場合は末尾に
-      const overIsCard = overCol.cards.some((c) => c.id === overId);
-      const insertIndex = overIsCard
-        ? overSorted.findIndex((c) => c.id === overId)
-        : overSorted.length;
+      const activeIndex = activeSorted.findIndex((c) => c.id === activeId);
 
-      const newActive = { ...activeCard, columnId: overCol.id };
-      const newOverCards = [...overSorted.slice(0, insertIndex), newActive, ...overSorted.slice(insertIndex)]
-        .map((c, i) => ({ ...c, position: i + 1 }));
+      if (activeColumnId === overColumnId) {
+        // ── 同カラム内：over がカードのときだけ並び替え ──
+        if (isColumnId(overId)) return cols; // カラム自体の上にいる間は動かさない
+        const overIndex = overSorted.findIndex((c) => c.id === overId);
+        if (activeIndex === overIndex) return cols;
 
-      return cols.map((col) => {
-        if (col.id === activeCol.id) {
-          return { ...col, cards: col.cards.filter((c) => c.id !== activeId).map((c, i) => ({ ...c, position: i + 1 })) };
-        }
-        if (col.id === overCol.id) {
-          return { ...col, cards: newOverCards };
-        }
-        return col;
-      });
+        const reordered = arrayMove(activeSorted, activeIndex, overIndex)
+          .map((c, i) => ({ ...c, position: i + 1 }));
+
+        const newPosition = reordered.findIndex((c) => c.id === activeId) + 1;
+        pendingMoveRef.current = { cardId: activeId, targetColumnId: overColumnId, newPosition };
+
+        return cols.map((col) =>
+          col.id === activeColumnId ? { ...col, cards: reordered } : col
+        );
+      } else {
+        // ── カラムをまたぐ ──
+        const movedCard = { ...activeSorted[activeIndex], columnId: overColumnId };
+
+        // 挿入先インデックスを決める
+        const overIndex = isColumnId(overId)
+          ? overSorted.length          // カラム自体 → 末尾
+          : overSorted.findIndex((c) => c.id === overId); // カード → その位置
+
+        const newOverCards = [
+          ...overSorted.slice(0, overIndex),
+          movedCard,
+          ...overSorted.slice(overIndex),
+        ].map((c, i) => ({ ...c, position: i + 1 }));
+
+        const newPosition = newOverCards.findIndex((c) => c.id === activeId) + 1;
+        pendingMoveRef.current = { cardId: activeId, targetColumnId: overColumnId, newPosition };
+
+        return cols.map((col) => {
+          if (col.id === activeColumnId) {
+            const remaining = activeSorted
+              .filter((c) => c.id !== activeId)
+              .map((c, i) => ({ ...c, position: i + 1 }));
+            return { ...col, cards: remaining };
+          }
+          if (col.id === overColumnId) {
+            return { ...col, cards: newOverCards };
+          }
+          return col;
+        });
+      }
     });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
+    const { over } = event;
     setActiveCard(null);
 
-    if (!over) {
-      // ドロップ先なし → スナップショットに戻す
-      if (snapshotRef.current) setColumns(() => snapshotRef.current!);
-      snapshotRef.current = null;
+    if (!over || !pendingMoveRef.current) {
+      pendingMoveRef.current = null;
       return;
     }
 
-    const activeId = Number(active.id);
-    const overId = Number(over.id);
-    snapshotRef.current = null;
+    const { cardId, targetColumnId, newPosition } = pendingMoveRef.current;
+    pendingMoveRef.current = null;
 
-    // ドロップ先のカラムを特定
-    const targetCol =
-      columns.find((c) => c.id === overId) ??
-      findColumnByCardId(overId);
-    if (!targetCol) return;
-
-    const sorted = [...targetCol.cards].sort((a, b) => a.position - b.position);
-    const oldIndex = sorted.findIndex((c) => c.id === activeId);
-    const newIndex = sorted.findIndex((c) => c.id === overId);
-
-    let finalPosition: number;
-
-    if (oldIndex === -1) {
-      // 別カラムから来た場合：over がカードならその位置、カラムなら末尾
-      const overIsCard = targetCol.cards.some((c) => c.id === overId);
-      finalPosition = overIsCard ? (newIndex + 1) : (sorted.length + 1);
-    } else if (oldIndex === newIndex || overId === activeId) {
-      // 動かしていない
-      return;
-    } else {
-      // 同カラム内並び替え：arrayMove で正しい位置を算出
-      const reordered = arrayMove(sorted, oldIndex, newIndex);
-      finalPosition = reordered.findIndex((c) => c.id === activeId) + 1;
-
-      // 楽観的更新（同カラム内）
-      setColumns((cols) =>
-        cols.map((col) =>
-          col.id === targetCol.id
-            ? { ...col, cards: reordered.map((c, i) => ({ ...c, position: i + 1 })) }
-            : col
-        )
-      );
-    }
-
-    moveCardAsync(activeId, { targetColumnId: targetCol.id, newPosition: finalPosition });
+    moveCardAsync(cardId, { targetColumnId, newPosition });
   };
 
   if (isLoading) {
@@ -169,7 +167,7 @@ export function BoardView() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}

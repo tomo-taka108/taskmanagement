@@ -13,6 +13,7 @@ interface Props {
 export function Column({ column, onCardClick }: Props) {
   const [isAdding, setIsAdding] = useState(false);
 
+  // カラム自体を droppable にする（カードのない空カラムへのドロップに対応）
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   const sorted = [...column.cards].sort((a, b) => a.position - b.position);
@@ -43,8 +44,14 @@ export function Column({ column, onCardClick }: Props) {
         </span>
       </div>
 
+      {/* SortableContext と useDroppable の ref を同じ要素に当てることで
+          カード間・カラム余白どちらへのドロップも確実に拾う */}
       <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className="flex flex-col gap-2 min-h-[8px]">
+        <div
+          ref={setNodeRef}
+          className="flex flex-col gap-2"
+          style={{ minHeight: '48px' }}
+        >
           <CardList cards={sorted} onCardClick={onCardClick} />
         </div>
       </SortableContext>
