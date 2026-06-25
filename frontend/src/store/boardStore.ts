@@ -52,8 +52,15 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   setColumns: (updater) => set((s) => ({ columns: updater(s.columns) })),
 
   moveCardAsync: async (cardId, data) => {
-    await moveCard(cardId, data);
-    await get().loadBoard();
+    // 楽観的更新は handleDragOver で完了済み。APIのみ呼ぶ。
+    // 失敗時はリロードで復元する。
+    try {
+      await moveCard(cardId, data);
+    } catch {
+      // API失敗時はサーバーの正しい状態に戻す
+      const columns = await fetchColumns();
+      set({ columns: [...columns].sort((a, b) => a.position - b.position) });
+    }
   },
 
   updateCardAsync: async (cardId, data) => {

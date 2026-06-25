@@ -20,6 +20,9 @@ import type { CardResponse } from '../../types/api';
 
 export function BoardView() {
   const { isLoading, error, loadBoard, moveCardAsync, columns, setColumns } = useBoardStore();
+
+  // 初回ロード中（まだデータが一件もない）ときだけスピナーを出す
+  const isInitialLoading = isLoading && columns.length === 0;
   const filteredColumns = useFilteredBoard();
 
   const [activeCard, setActiveCard] = useState<CardResponse | null>(null);
@@ -138,7 +141,7 @@ export function BoardView() {
     moveCardAsync(cardId, { targetColumnId, newPosition });
   };
 
-  if (isLoading) {
+  if (isInitialLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div
