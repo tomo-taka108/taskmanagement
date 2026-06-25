@@ -1,19 +1,29 @@
 import { useState } from 'react';
-import type { BoardColumnResponse } from '../../types/api';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import type { BoardColumnResponse, CardResponse } from '../../types/api';
 import { CardList } from './CardList';
 import { AddCardForm } from '../card/AddCardForm';
 
 interface Props {
   column: BoardColumnResponse;
+  onCardClick: (card: CardResponse) => void;
 }
 
-export function Column({ column }: Props) {
+export function Column({ column, onCardClick }: Props) {
   const [isAdding, setIsAdding] = useState(false);
+
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+
+  const sorted = [...column.cards].sort((a, b) => a.position - b.position);
+  const cardIds = sorted.map((c) => c.id);
 
   return (
     <div
-      className="flex flex-col rounded-lg w-72 shrink-0 p-3 gap-3"
-      style={{ backgroundColor: 'var(--color-bg-column)' }}
+      className="flex flex-col rounded-lg w-72 shrink-0 p-3 gap-3 transition-colors"
+      style={{
+        backgroundColor: isOver ? 'var(--color-border)' : 'var(--color-bg-column)',
+      }}
     >
       <div className="flex items-center justify-between px-1">
         <h2
@@ -33,7 +43,11 @@ export function Column({ column }: Props) {
         </span>
       </div>
 
-      <CardList cards={column.cards} />
+      <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+        <div ref={setNodeRef} className="flex flex-col gap-2 min-h-[8px]">
+          <CardList cards={sorted} onCardClick={onCardClick} />
+        </div>
+      </SortableContext>
 
       {isAdding ? (
         <AddCardForm columnId={column.id} onClose={() => setIsAdding(false)} />
