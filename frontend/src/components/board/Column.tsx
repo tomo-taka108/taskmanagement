@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { BoardColumnResponse, CardResponse } from '../../types/api';
+import { useFilteredBoard } from '../../hooks/useFilteredBoard';
 import { CardList } from './CardList';
 import { AddCardForm } from '../card/AddCardForm';
 
@@ -13,11 +14,18 @@ interface Props {
 export function Column({ column, onCardClick }: Props) {
   const [isAdding, setIsAdding] = useState(false);
 
-  // カラム自体を droppable にする（カードのない空カラムへのドロップに対応）
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
-  const sorted = [...column.cards].sort((a, b) => a.position - b.position);
-  const cardIds = sorted.map((c) => c.id);
+  // フィルター済みのカードを取得（表示用のみ。D&Dのロジックには影響しない）
+  const filteredColumns = useFilteredBoard();
+  const filteredColumn = filteredColumns.find((c) => c.id === column.id);
+  const displayCards = filteredColumn ? filteredColumn.cards : column.cards;
+
+  // SortableContext には全カードのIDを渡す（フィルターに関係なくD&Dが動くように）
+  const allSorted = [...column.cards].sort((a, b) => a.position - b.position);
+  const allCardIds = allSorted.map((c) => c.id);
+
+  const displaySorted = [...displayCards].sort((a, b) => a.position - b.position);
 
   return (
     <div
@@ -44,15 +52,13 @@ export function Column({ column, onCardClick }: Props) {
         </span>
       </div>
 
-      {/* SortableContext と useDroppable の ref を同じ要素に当てることで
-          カード間・カラム余白どちらへのドロップも確実に拾う */}
-      <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+      <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
         <div
           ref={setNodeRef}
           className="flex flex-col gap-2"
           style={{ minHeight: '48px' }}
         >
-          <CardList cards={sorted} onCardClick={onCardClick} />
+          <CardList cards={displaySorted} onCardClick={onCardClick} />
         </div>
       </SortableContext>
 
