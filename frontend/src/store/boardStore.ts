@@ -14,7 +14,7 @@ interface BoardStore {
   error: string | null;
   loadBoard: () => Promise<void>;
   addCard: (columnId: number, data: CreateCardRequest) => Promise<void>;
-  moveCardOptimistic: (cardId: number, fromColumnId: number, toColumnId: number, newPosition: number) => void;
+  setColumns: (updater: (cols: BoardColumnResponse[]) => BoardColumnResponse[]) => void;
   moveCardAsync: (cardId: number, data: MoveCardRequest) => Promise<void>;
   updateCardAsync: (cardId: number, data: UpdateCardRequest) => Promise<CardResponse>;
 
@@ -49,44 +49,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
     }));
   },
 
-  moveCardOptimistic: (cardId, fromColumnId, toColumnId, newPosition) => {
-    set((s) => {
-      const fromCol = s.columns.find((c) => c.id === fromColumnId);
-      if (!fromCol) return s;
-      const card = fromCol.cards.find((c) => c.id === cardId);
-      if (!card) return s;
-
-      const updatedCard = { ...card, columnId: toColumnId, position: newPosition };
-
-      const columns = s.columns.map((col) => {
-        if (col.id === fromColumnId && col.id === toColumnId) {
-          // 同じカラム内の並び替え
-          const others = col.cards.filter((c) => c.id !== cardId);
-          const reordered = [
-            ...others.slice(0, newPosition - 1),
-            updatedCard,
-            ...others.slice(newPosition - 1),
-          ].map((c, i) => ({ ...c, position: i + 1 }));
-          return { ...col, cards: reordered };
-        }
-        if (col.id === fromColumnId) {
-          return { ...col, cards: col.cards.filter((c) => c.id !== cardId) };
-        }
-        if (col.id === toColumnId) {
-          const others = col.cards;
-          const reordered = [
-            ...others.slice(0, newPosition - 1),
-            updatedCard,
-            ...others.slice(newPosition - 1),
-          ].map((c, i) => ({ ...c, position: i + 1 }));
-          return { ...col, cards: reordered };
-        }
-        return col;
-      });
-
-      return { columns };
-    });
-  },
+  setColumns: (updater) => set((s) => ({ columns: updater(s.columns) })),
 
   moveCardAsync: async (cardId, data) => {
     await moveCard(cardId, data);
