@@ -6,6 +6,7 @@ interface Props {
   card: CardResponse;
   onClose: () => void;
   onUpdated: (updated: CardResponse) => void;
+  onDeleted: () => void;
 }
 
 const PRIORITIES: { value: Priority; label: string }[] = [
@@ -14,14 +15,16 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: 'LOW', label: '低' },
 ];
 
-export function CardDetailModal({ card, onClose, onUpdated }: Props) {
-  const { updateCardAsync } = useBoardStore();
+export function CardDetailModal({ card, onClose, onUpdated, onDeleted }: Props) {
+  const { updateCardAsync, deleteCardAsync } = useBoardStore();
 
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? '');
   const [priority, setPriority] = useState<Priority | ''>(card.priority ?? '');
   const [dueDate, setDueDate] = useState(card.dueDate ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -61,6 +64,19 @@ export function CardDetailModal({ card, onClose, onUpdated }: Props) {
     }
   };
 
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    setError(null);
+    try {
+      await deleteCardAsync(card.id, card.columnId);
+      onDeleted();
+    } catch {
+      setError('削除に失敗しました');
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   const columnName = useBoardStore
     .getState()
     .columns.find((c) => c.id === card.columnId)?.title ?? '';
@@ -73,7 +89,7 @@ export function CardDetailModal({ card, onClose, onUpdated }: Props) {
       onClick={handleOverlayClick}
     >
       <div
-        className="relative w-full max-w-lg rounded-xl shadow-2xl p-6 flex flex-col gap-4"
+        className="relative w-full max-w-lg rounded-xl shadow-2xl p-6 flex flex-col gap-4 overflow-hidden"
         style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-main)' }}
       >
         {/* ヘッダー */}
@@ -189,26 +205,75 @@ export function CardDetailModal({ card, onClose, onUpdated }: Props) {
         )}
 
         {/* アクション */}
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            className="px-4 py-2 text-sm rounded-md hover:brightness-95 transition-all"
-            style={{
-              backgroundColor: 'var(--color-bg-column)',
-              color: 'var(--color-text-main)',
-            }}
-            onClick={onClose}
-          >
-            キャンセル
-          </button>
+        <div className="flex justify-between items-center pt-2">
           <button
             className="px-4 py-2 text-sm rounded-md font-medium text-white disabled:opacity-60"
-            style={{ backgroundColor: 'var(--color-bg-header)' }}
-            onClick={handleSave}
-            disabled={isSaving}
+            style={{ backgroundColor: '#dc2626' }}
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isSaving || isDeleting}
           >
-            {isSaving ? '保存中...' : '保存'}
+            削除
           </button>
+          <div className="flex gap-2">
+            <button
+              className="px-4 py-2 text-sm rounded-md hover:brightness-95 transition-all"
+              style={{
+                backgroundColor: 'var(--color-bg-column)',
+                color: 'var(--color-text-main)',
+              }}
+              onClick={onClose}
+            >
+              キャンセル
+            </button>
+            <button
+              className="px-4 py-2 text-sm rounded-md font-medium text-white disabled:opacity-60"
+              style={{ backgroundColor: 'var(--color-bg-header)' }}
+              onClick={handleSave}
+              disabled={isSaving || isDeleting}
+            >
+              {isSaving ? '保存中...' : '保存'}
+            </button>
+          </div>
         </div>
+
+        {/* 削除確認ダイアログ */}
+        {showDeleteConfirm && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center rounded-xl"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          >
+            <div
+              className="rounded-xl p-6 shadow-xl flex flex-col gap-4 w-72"
+              style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-main)' }}
+            >
+              <p className="text-sm font-medium">このカードを削除しますか？</p>
+              <p className="text-xs" style={{ color: 'var(--color-text-sub)' }}>
+                「{card.title}」を削除します。この操作は元に戻せません。
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  className="px-4 py-2 text-sm rounded-md hover:brightness-95 transition-all"
+                  style={{
+                    backgroundColor: 'var(--color-bg-column)',
+                    color: 'var(--color-text-main)',
+                  }}
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="px-4 py-2 text-sm rounded-md font-medium text-white disabled:opacity-60"
+                  style={{ backgroundColor: '#dc2626' }}
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? '削除中...' : '削除する'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

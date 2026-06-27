@@ -70,6 +70,14 @@ public class CardService {
     }
 
     @Transactional
+    public void delete(Long id) {
+        Card card = cardRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
+        cardRepository.shiftPositionsDown(card.getColumn().getId(), card.getPosition());
+        cardRepository.delete(card);
+    }
+
+    @Transactional
     public CardResponse move(Long id, MoveCardRequest request) {
         Card card = cardRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("Card not found: " + id));

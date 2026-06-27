@@ -50,4 +50,10 @@ public class CardController {
             @Valid @RequestBody MoveCardRequest request) {
         return cardService.move(id, request);
     }
+
+    @DeleteMapping("/cards/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCard(@PathVariable Long id) {
+        cardService.delete(id);
+    }
 }
