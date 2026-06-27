@@ -1,7 +1,8 @@
 # データベース設計書
 
-**バージョン:** 0.1  
+**バージョン:** 0.2  
 **作成日:** 2026-06-13  
+**改訂日:** 2026-06-28  
 **作成者:** tomo-taka108
 
 ---
@@ -30,6 +31,7 @@ erDiagram
         TEXT description
         DATE due_date
         VARCHAR color
+        VARCHAR priority
         INT position
         DATETIME created_at
         DATETIME updated_at
@@ -83,7 +85,8 @@ erDiagram
 | title | VARCHAR(255) | NOT NULL | カードタイトル |
 | description | TEXT | NULL | 説明文 |
 | due_date | DATE | NULL | 期限日 |
-| color | VARCHAR(50) | NULL | カード背景色 |
+| color | VARCHAR(50) | NULL | カード背景色（現在未使用） |
+| priority | VARCHAR(50) | NULL | 優先度（HIGH / MEDIUM / LOW） |
 | position | INT | NOT NULL | カラム内表示順序 |
 | created_at | DATETIME | NOT NULL | 作成日時 |
 | updated_at | DATETIME | NOT NULL | 更新日時 |
