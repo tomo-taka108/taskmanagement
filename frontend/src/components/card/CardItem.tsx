@@ -1,4 +1,5 @@
-import { useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { CardResponse, Priority } from '../../types/api';
 import { LabelBadge } from '../ui/LabelBadge';
 import { DueBadge } from '../ui/DueBadge';
@@ -8,8 +9,6 @@ interface Props {
   card: CardResponse;
   onClick?: () => void;
   isDragging?: boolean;
-  // ドラッグ中に元の場所を示すゴースト表示
-  isGhost?: boolean;
 }
 
 const PRIORITY_LABEL: Record<Priority, string> = {
@@ -24,31 +23,36 @@ const PRIORITY_STYLE: Record<Priority, string> = {
   LOW: 'bg-green-100 text-green-700',
 };
 
-export function CardItem({ card, onClick, isDragging, isGhost }: Props) {
-  const { attributes, listeners, setNodeRef, isDragging: isDraggingNow } = useDraggable({
-    id: card.id,
-  });
+export function CardItem({ card, onClick, isDragging }: Props) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging: isSortableDragging,
+  } = useSortable({ id: card.id });
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (isDraggingNow) return;
-    onClick?.();
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isSortableDragging ? 0.35 : 1,
+    backgroundColor: 'var(--color-bg-card)',
+    color: 'var(--color-text-main)',
+    ...(isDragging ? { boxShadow: '0 8px 24px rgba(0,0,0,0.22)', transform: 'rotate(1.5deg)' } : {}),
   };
 
   return (
     <div
       ref={setNodeRef}
+      style={style}
       {...attributes}
       {...listeners}
       className="rounded-md p-3 shadow-sm cursor-grab active:cursor-grabbing hover:brightness-95 transition-all"
-      style={{
-        backgroundColor: 'var(--color-bg-card)',
-        color: 'var(--color-text-main)',
-        opacity: isGhost ? 0.35 : 1,
-        ...(isDragging
-          ? { boxShadow: '0 8px 24px rgba(0,0,0,0.22)', transform: 'rotate(1.5deg)' }
-          : {}),
+      onClick={(e) => {
+        if (isSortableDragging) return;
+        onClick?.();
       }}
-      onClick={handleClick}
     >
       {card.labels.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">

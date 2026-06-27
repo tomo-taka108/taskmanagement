@@ -1,22 +1,16 @@
 import type { CardResponse } from '../../types/api';
-import { DroppableCard } from '../card/DroppableCard';
+import { CardItem } from '../card/CardItem';
 
 interface Props {
   cards: CardResponse[];
-  ghostCardId: number | null;
   onCardClick: (card: CardResponse) => void;
 }
 
-export function CardList({ cards, ghostCardId, onCardClick }: Props) {
+export function CardList({ cards, onCardClick }: Props) {
   return (
     <>
       {cards.map((card) => (
-        <DroppableCard
-          key={card.id}
-          card={card}
-          isGhost={card.id === ghostCardId}
-          onCardClick={onCardClick}
-        />
+        <CardItem key={card.id} card={card} onClick={() => onCardClick(card)} />
       ))}
     </>
   );

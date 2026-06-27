@@ -1,27 +1,22 @@
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { BoardColumnResponse, CardResponse } from '../../types/api';
-import { useFilteredBoard } from '../../hooks/useFilteredBoard';
 import { CardList } from './CardList';
 import { AddCardForm } from '../card/AddCardForm';
 
 interface Props {
   column: BoardColumnResponse;
-  ghostCardId: number | null;
   onCardClick: (card: CardResponse) => void;
 }
 
-export function Column({ column, ghostCardId, onCardClick }: Props) {
+export function Column({ column, onCardClick }: Props) {
   const [isAdding, setIsAdding] = useState(false);
 
-  // カラム余白へのドロップ（末尾追加）
-  const { setNodeRef, isOver } = useDroppable({ id: `col:${column.id}` });
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
-  // 表示はフィルター適用済みを使う
-  const filteredColumns = useFilteredBoard();
-  const filteredColumn  = filteredColumns.find((c) => c.id === column.id);
-  const displayCards    = filteredColumn ? filteredColumn.cards : column.cards;
-  const displaySorted   = [...displayCards].sort((a, b) => a.position - b.position);
+  const sortedCards = [...column.cards].sort((a, b) => a.position - b.position);
+  const allCardIds  = sortedCards.map((c) => c.id);
 
   return (
     <div
@@ -42,17 +37,11 @@ export function Column({ column, ghostCardId, onCardClick }: Props) {
         </span>
       </div>
 
-      <div
-        ref={setNodeRef}
-        className="flex flex-col gap-2"
-        style={{ minHeight: '48px' }}
-      >
-        <CardList
-          cards={displaySorted}
-          ghostCardId={ghostCardId}
-          onCardClick={onCardClick}
-        />
-      </div>
+      <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
+        <div ref={setNodeRef} className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
+          <CardList cards={sortedCards} onCardClick={onCardClick} />
+        </div>
+      </SortableContext>
 
       {isAdding ? (
         <AddCardForm columnId={column.id} onClose={() => setIsAdding(false)} />
