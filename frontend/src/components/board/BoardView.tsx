@@ -22,14 +22,13 @@ import type { BoardColumnResponse, CardResponse } from '../../types/api';
 // ── カスタム衝突検出 ──────────────────────────────────────────────
 // ポインター直下を優先、なければ矩形交差にフォールバック
 const customCollision: CollisionDetection = (args) => {
-  const pointerHits = pointerWithin(args);
-  if (pointerHits.length > 0) return pointerHits;
-  return rectIntersection(args);
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : rectIntersection(args);
 };
 
 // ── ヘルパー ──────────────────────────────────────────────────────
 
-function sortedCards(cards: CardResponse[]) {
+function byPosition(cards: CardResponse[]) {
   return [...cards].sort((a, b) => a.position - b.position);
 }
 
@@ -41,49 +40,6 @@ function isColId(cols: BoardColumnResponse[], id: number) {
   return cols.some((c) => c.id === id);
 }
 
-// cols の中で activeId を overColumnId の overIndex 位置に移動した新配列を返す
-function applyMove(
-  cols: BoardColumnResponse[],
-  activeId: number,
-  overColumnId: number,
-  overIndex: number,
-): BoardColumnResponse[] {
-  const activeColId = findColByCardId(cols, activeId)!.id;
-  const activeCol   = cols.find((c) => c.id === activeColId)!;
-  const overCol     = cols.find((c) => c.id === overColumnId)!;
-
-  const activeSorted = sortedCards(activeCol.cards);
-  const activeIdx    = activeSorted.findIndex((c) => c.id === activeId);
-  const movedCard    = { ...activeSorted[activeIdx], columnId: overColumnId };
-
-  if (activeColId === overColumnId) {
-    // 同カラム内：arrayMove で並び替え
-    const reordered = arrayMove(activeSorted, activeIdx, overIndex)
-      .map((c, i) => ({ ...c, position: i + 1 }));
-    return cols.map((col) =>
-      col.id === activeColId ? { ...col, cards: reordered } : col
-    );
-  }
-
-  // 別カラムへ
-  const newActiveCards = activeSorted
-    .filter((c) => c.id !== activeId)
-    .map((c, i) => ({ ...c, position: i + 1 }));
-
-  const overSorted     = sortedCards(overCol.cards);
-  const newOverCards   = [
-    ...overSorted.slice(0, overIndex),
-    movedCard,
-    ...overSorted.slice(overIndex),
-  ].map((c, i) => ({ ...c, position: i + 1 }));
-
-  return cols.map((col) => {
-    if (col.id === activeColId)  return { ...col, cards: newActiveCards };
-    if (col.id === overColumnId) return { ...col, cards: newOverCards };
-    return col;
-  });
-}
-
 // ── コンポーネント ────────────────────────────────────────────────
 
 export function BoardView() {
@@ -92,9 +48,9 @@ export function BoardView() {
   const [activeCard, setActiveCard]     = useState<CardResponse | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardResponse | null>(null);
 
-  // ドラッグ中の作業配列（store とは独立）
-  const workingCols = useRef<BoardColumnResponse[]>([]);
-  // DragEnd 時に API へ送るパラメータ
+  // ドラッグ開始時の元配列（毎回ここから計算し直す）
+  const originCols  = useRef<BoardColumnResponse[]>([]);
+  // DragEnd 時に API へ送るパラメータ（最後に確定した移動先）
   const pendingMove = useRef<{ cardId: number; targetColumnId: number; newPosition: number } | null>(null);
 
   const sensors = useSensors(
@@ -103,10 +59,14 @@ export function BoardView() {
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const activeId = Number(event.active.id);
-    // 開始時点の columns をディープコピーして作業用に保持
-    workingCols.current = columns.map((col) => ({ ...col, cards: [...col.cards] }));
+    // ドラッグ開始時点の状態を保存（以後この配列は変更しない）
+    originCols.current = columns.map((col) => ({
+      ...col,
+      cards: [...col.cards],
+    }));
     pendingMove.current = null;
-    const card = findColByCardId(workingCols.current, activeId)
+
+    const card = findColByCardId(originCols.current, activeId)
       ?.cards.find((c) => c.id === activeId);
     if (card) setActiveCard(card);
   }, [columns]);
@@ -119,53 +79,111 @@ export function BoardView() {
     const overId   = Number(over.id);
     if (activeId === overId) return;
 
-    const cols = workingCols.current;
-    if (!findColByCardId(cols, activeId)) return;
+    // 常に元配列から計算し直す（累積ずれを防ぐ）
+    const cols = originCols.current;
+
+    const activeColId = findColByCardId(cols, activeId)?.id;
+    if (activeColId === undefined) return;
 
     let overColumnId: number;
-    let overIndex: number;
+    let newCols: BoardColumnResponse[];
 
     if (isColId(cols, overId)) {
-      // カラムの余白エリアにいる → 末尾に追加
+      // ── カラムの余白エリア → 末尾に追加 ──
       overColumnId = overId;
-      overIndex    = sortedCards(cols.find((c) => c.id === overId)!.cards).length;
+      const activeCol    = cols.find((c) => c.id === activeColId)!;
+      const overCol      = cols.find((c) => c.id === overColumnId)!;
+      const activeSorted = byPosition(activeCol.cards);
+      const activeIdx    = activeSorted.findIndex((c) => c.id === activeId);
+      const movedCard    = { ...activeSorted[activeIdx], columnId: overColumnId };
+
+      if (activeColId === overColumnId) {
+        // 同カラムの余白 = 末尾へ
+        const reordered = [
+          ...activeSorted.filter((c) => c.id !== activeId),
+          movedCard,
+        ].map((c, i) => ({ ...c, position: i + 1 }));
+        newCols = cols.map((col) =>
+          col.id === activeColId ? { ...col, cards: reordered } : col
+        );
+      } else {
+        // 別カラムの余白 = 末尾へ
+        const newActiveCards = activeSorted
+          .filter((c) => c.id !== activeId)
+          .map((c, i) => ({ ...c, position: i + 1 }));
+        const overSorted   = byPosition(overCol.cards);
+        const newOverCards = [...overSorted, movedCard]
+          .map((c, i) => ({ ...c, position: i + 1 }));
+        newCols = cols.map((col) => {
+          if (col.id === activeColId)  return { ...col, cards: newActiveCards };
+          if (col.id === overColumnId) return { ...col, cards: newOverCards };
+          return col;
+        });
+      }
     } else {
-      // 別カードの上にいる
+      // ── 別のカードの上にいる ──
       const overCol = findColByCardId(cols, overId);
       if (!overCol) return;
       overColumnId = overCol.id;
 
-      const overSorted   = sortedCards(overCol.cards);
-      const overCardIdx  = overSorted.findIndex((c) => c.id === overId);
-      if (overCardIdx === -1) return;
+      const activeCol    = cols.find((c) => c.id === activeColId)!;
+      const activeSorted = byPosition(activeCol.cards);
+      const activeIdx    = activeSorted.findIndex((c) => c.id === activeId);
+      const movedCard    = { ...activeSorted[activeIdx], columnId: overColumnId };
 
-      const activeColId = findColByCardId(cols, activeId)!.id;
+      // ポインターがカードの上半分か下半分かを判定
+      const translated = active.rect.current.translated;
+      const pointerY   = translated ? translated.top + translated.height / 2 : 0;
+      const cardMidY   = over.rect.top + over.rect.height / 2;
+      const isBelow    = pointerY > cardMidY;
 
       if (activeColId === overColumnId) {
-        // 同カラム内：ポインターがカードの中心より下なら +1 先に挿入
-        const translated = active.rect.current.translated;
-        const pointerY   = translated ? translated.top + translated.height / 2 : 0;
-        const cardMidY   = over.rect.top + over.rect.height / 2;
-        const activeIdx  = overSorted.findIndex((c) => c.id === activeId);
-        // arrayMove の to インデックスに使う
-        overIndex = pointerY > cardMidY
-          ? (activeIdx < overCardIdx ? overCardIdx : overCardIdx + 1)
-          : (activeIdx > overCardIdx ? overCardIdx : overCardIdx - 1);
-        overIndex = Math.max(0, Math.min(overIndex, overSorted.length - 1));
+        // ── 同カラム内の並び替え ──
+        const overIdx = activeSorted.findIndex((c) => c.id === overId);
+        if (overIdx === -1) return;
+
+        // arrayMove の to インデックス：
+        //   上半分 → overIdx のひとつ前へ
+        //   下半分 → overIdx のひとつ後へ
+        // ただし activeIdx と overIdx の前後関係で補正不要（arrayMove が処理する）
+        const toIdx = isBelow
+          ? (activeIdx <= overIdx ? overIdx : overIdx + 1)
+          : (activeIdx >= overIdx ? overIdx : overIdx - 1);
+        const clampedToIdx = Math.max(0, Math.min(toIdx, activeSorted.length - 1));
+
+        const reordered = arrayMove(activeSorted, activeIdx, clampedToIdx)
+          .map((c, i) => ({ ...c, position: i + 1 }));
+        newCols = cols.map((col) =>
+          col.id === activeColId ? { ...col, cards: reordered } : col
+        );
       } else {
-        // 別カラムへ：ポインターがカードの中心より下なら後ろに挿入
-        const translated = active.rect.current.translated;
-        const pointerY   = translated ? translated.top + translated.height / 2 : 0;
-        const cardMidY   = over.rect.top + over.rect.height / 2;
-        overIndex = pointerY > cardMidY ? overCardIdx + 1 : overCardIdx;
+        // ── 別カラムへの移動 ──
+        const overSorted = byPosition(overCol.cards);
+        const overIdx    = overSorted.findIndex((c) => c.id === overId);
+        if (overIdx === -1) return;
+
+        const insertIdx  = isBelow ? overIdx + 1 : overIdx;
+
+        const newActiveCards = activeSorted
+          .filter((c) => c.id !== activeId)
+          .map((c, i) => ({ ...c, position: i + 1 }));
+        const newOverCards = [
+          ...overSorted.slice(0, insertIdx),
+          movedCard,
+          ...overSorted.slice(insertIdx),
+        ].map((c, i) => ({ ...c, position: i + 1 }));
+
+        newCols = cols.map((col) => {
+          if (col.id === activeColId)  return { ...col, cards: newActiveCards };
+          if (col.id === overColumnId) return { ...col, cards: newOverCards };
+          return col;
+        });
       }
     }
 
-    const newCols = applyMove(cols, activeId, overColumnId, overIndex);
-    workingCols.current = newCols;
-
+    // 確定した移動先を記録
     const targetCol   = newCols.find((c) => c.id === overColumnId)!;
-    const newPosition = sortedCards(targetCol.cards).findIndex((c) => c.id === activeId) + 1;
+    const newPosition = byPosition(targetCol.cards).findIndex((c) => c.id === activeId) + 1;
     pendingMove.current = { cardId: activeId, targetColumnId: overColumnId, newPosition };
 
     setColumns(() => newCols);
@@ -173,10 +191,9 @@ export function BoardView() {
 
   const handleDragEnd = useCallback((_event: DragEndEvent) => {
     setActiveCard(null);
-    workingCols.current = [];
+    originCols.current = [];
 
     if (!pendingMove.current) {
-      // ドロップ先なし → サーバー状態に戻す
       loadBoard();
       return;
     }
