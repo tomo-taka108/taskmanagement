@@ -40,6 +40,18 @@ export interface CreateCardRequest {
   dueDate?: string;
 }
 
+export interface UpdateCardRequest {
+  title?: string;
+  description?: string;
+  priority?: Priority | null;
+  dueDate?: string | null;
+}
+
+export interface MoveCardRequest {
+  targetColumnId: number;
+  newPosition: number;
+}
+
 export type DueFilter = '' | 'overdue' | 'this-week';
 
 export interface FilterState {

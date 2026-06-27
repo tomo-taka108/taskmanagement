@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { BoardColumnResponse, CreateCardRequest, FilterState } from '../types/api';
-import { createCard, fetchColumns } from '../api/client';
+import type { BoardColumnResponse, CardResponse, CreateCardRequest, FilterState, MoveCardRequest, UpdateCardRequest } from '../types/api';
+import { createCard, fetchColumns, moveCard, updateCard } from '../api/client';
 
 const initialFilter: FilterState = {
   keyword: '',
@@ -14,6 +14,9 @@ interface BoardStore {
   error: string | null;
   loadBoard: () => Promise<void>;
   addCard: (columnId: number, data: CreateCardRequest) => Promise<void>;
+  setColumns: (updater: (cols: BoardColumnResponse[]) => BoardColumnResponse[]) => void;
+  moveCardAsync: (cardId: number, data: MoveCardRequest) => Promise<void>;
+  updateCardAsync: (cardId: number, data: UpdateCardRequest) => Promise<CardResponse>;
 
   filter: FilterState;
   setKeyword: (keyword: string) => void;
@@ -21,7 +24,7 @@ interface BoardStore {
   setDue: (due: FilterState['due']) => void;
 }
 
-export const useBoardStore = create<BoardStore>((set) => ({
+export const useBoardStore = create<BoardStore>((set, get) => ({
   columns: [],
   isLoading: false,
   error: null,
@@ -44,6 +47,32 @@ export const useBoardStore = create<BoardStore>((set) => ({
         col.id === columnId ? { ...col, cards: [...col.cards, card] } : col
       ),
     }));
+  },
+
+  setColumns: (updater) => set((s) => ({ columns: updater(s.columns) })),
+
+  moveCardAsync: async (cardId, data) => {
+    // 楽観的更新は handleDragOver で完了済み。APIのみ呼ぶ。
+    // 失敗時はリロードで復元する。
+    try {
+      await moveCard(cardId, data);
+    } catch {
+      // API失敗時はサーバーの正しい状態に戻す
+      const columns = await fetchColumns();
+      set({ columns: [...columns].sort((a, b) => a.position - b.position) });
+    }
+  },
+
+  updateCardAsync: async (cardId, data) => {
+    const updated = await updateCard(cardId, data);
+    set((s) => ({
+      columns: s.columns.map((col) =>
+        col.id === updated.columnId
+          ? { ...col, cards: col.cards.map((c) => (c.id === cardId ? updated : c)) }
+          : col
+      ),
+    }));
+    return updated;
   },
 
   filter: initialFilter,
