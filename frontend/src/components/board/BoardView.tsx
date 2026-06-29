@@ -213,6 +213,7 @@ export function BoardView() {
           card={selectedCard}
           onClose={() => setSelectedCard(null)}
           onUpdated={(updated) => setSelectedCard(updated)}
+          onDeleted={() => setSelectedCard(null)}
         />
       )}
     </DndContext>

@@ -26,3 +26,6 @@ export const moveCard = (
   data: MoveCardRequest
 ): Promise<CardResponse> =>
   apiClient.patch<CardResponse>(`/api/cards/${cardId}/move`, data).then((r) => r.data);
+
+export const deleteCard = (cardId: number): Promise<void> =>
+  apiClient.delete(`/api/cards/${cardId}`).then(() => undefined);

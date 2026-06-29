@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { BoardColumnResponse, CardResponse, CreateCardRequest, FilterState, MoveCardRequest, UpdateCardRequest } from '../types/api';
-import { createCard, fetchColumns, moveCard, updateCard } from '../api/client';
+import { createCard, deleteCard, fetchColumns, moveCard, updateCard } from '../api/client';
 
 const initialFilter: FilterState = {
   keyword: '',
@@ -17,6 +17,7 @@ interface BoardStore {
   setColumns: (updater: (cols: BoardColumnResponse[]) => BoardColumnResponse[]) => void;
   moveCardAsync: (cardId: number, data: MoveCardRequest) => Promise<void>;
   updateCardAsync: (cardId: number, data: UpdateCardRequest) => Promise<CardResponse>;
+  deleteCardAsync: (cardId: number, columnId: number) => Promise<void>;
 
   filter: FilterState;
   setKeyword: (keyword: string) => void;
@@ -73,6 +74,17 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       ),
     }));
     return updated;
+  },
+
+  deleteCardAsync: async (cardId, columnId) => {
+    await deleteCard(cardId);
+    set((s) => ({
+      columns: s.columns.map((col) =>
+        col.id === columnId
+          ? { ...col, cards: col.cards.filter((c) => c.id !== cardId) }
+          : col
+      ),
+    }));
   },
 
   filter: initialFilter,
