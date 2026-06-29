@@ -49,7 +49,7 @@ export function CardItem({ card, onClick, isDragging }: Props) {
       {...attributes}
       {...listeners}
       className="rounded-md p-3 shadow-sm cursor-grab active:cursor-grabbing hover:brightness-95 transition-all"
-      onClick={(e) => {
+      onClick={() => {
         if (isSortableDragging) return;
         onClick?.();
       }}

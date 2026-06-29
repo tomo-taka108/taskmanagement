@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface ChecklistItemRepository extends JpaRepository<ChecklistItem, Long> {
-    List<ChecklistItem> findByCardIdOrderByPositionAsc(Long cardId);
+	List<ChecklistItem> findByCardIdOrderByPositionAsc(Long cardId);
 }

@@ -35,6 +35,7 @@ export function BoardView() {
   const [localColumns, setLocalColumns] = useState<BoardColumnResponse[]>(columns);
   const [activeCard, setActiveCard]     = useState<CardResponse | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardResponse | null>(null);
+  const [isDragging, setIsDragging]     = useState(false);
   const draggingRef = useRef(false);
 
   // store が更新されたとき（D&D後の確定 or 外部更新）に同期
@@ -50,6 +51,7 @@ export function BoardView() {
 
   const handleDragStart = (event: DragStartEvent) => {
     draggingRef.current = true;
+    setIsDragging(true);
     const activeId = Number(event.active.id);
     // ドラッグ開始時に store のスナップショットを localColumns に取る
     const snap = columns.map((c) => ({ ...c, cards: [...c.cards] }));
@@ -122,6 +124,7 @@ export function BoardView() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     draggingRef.current = false;
+    setIsDragging(false);
     const { active, over } = event;
     setActiveCard(null);
 
@@ -182,7 +185,7 @@ export function BoardView() {
   }
 
   // ドラッグ中は localColumns（フィルター無効）、それ以外は filteredColumns を使う
-  const displayColumns = draggingRef.current ? localColumns : filteredColumns;
+  const displayColumns = isDragging ? localColumns : filteredColumns;
 
   return (
     <DndContext
@@ -198,7 +201,7 @@ export function BoardView() {
             key={column.id}
             column={column}
             onCardClick={(card) => {
-              if (!draggingRef.current) setSelectedCard(card);
+              if (!isDragging) setSelectedCard(card);
             }}
           />
         ))}

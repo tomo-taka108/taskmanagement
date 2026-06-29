@@ -15,17 +15,15 @@ import java.util.NoSuchElementException;
 @Transactional(readOnly = true)
 public class BoardColumnService {
 
-    private final BoardColumnRepository boardColumnRepository;
+	private final BoardColumnRepository boardColumnRepository;
 
-    public List<BoardColumnResponse> findAll() {
-        return boardColumnRepository.findAllByOrderByPositionAsc().stream()
-                .map(BoardColumnResponse::new)
-                .toList();
-    }
+	public List<BoardColumnResponse> findAll() {
+		return boardColumnRepository.findAllByOrderByPositionAsc().stream().map(BoardColumnResponse::new).toList();
+	}
 
-    public BoardColumnResponse findById(Long id) {
-        BoardColumn column = boardColumnRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Column not found: " + id));
-        return new BoardColumnResponse(column);
-    }
+	public BoardColumnResponse findById(Long id) {
+		BoardColumn column = boardColumnRepository.findById(id)
+				.orElseThrow(() -> new NoSuchElementException("Column not found: " + id));
+		return new BoardColumnResponse(column);
+	}
 }
