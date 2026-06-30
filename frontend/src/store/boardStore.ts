@@ -25,7 +25,7 @@ interface BoardStore {
   setDue: (due: FilterState['due']) => void;
 }
 
-export const useBoardStore = create<BoardStore>((set, get) => ({
+export const useBoardStore = create<BoardStore>((set) => ({
   columns: [],
   isLoading: false,
   error: null,

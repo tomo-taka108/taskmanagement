@@ -14,13 +14,13 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class CreateCardRequest {
 
-    @NotBlank
-    @Size(max = 255)
-    private String title;
+	@NotBlank
+	@Size(max = 255)
+	private String title;
 
-    private String description;
+	private String description;
 
-    private Priority priority;
+	private Priority priority;
 
-    private LocalDate dueDate;
+	private LocalDate dueDate;
 }

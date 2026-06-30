@@ -18,25 +18,25 @@ import java.util.List;
 @Builder
 public class BoardColumn {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
 
-    @Column(nullable = false, length = 255)
-    private String title;
+	@Column(nullable = false, length = 255)
+	private String title;
 
-    @Column(nullable = false)
-    private Integer position;
+	@Column(nullable = false)
+	private Integer position;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+	@CreationTimestamp
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+	@UpdateTimestamp
+	@Column(name = "updated_at", nullable = false)
+	private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "column", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<Card> cards = new ArrayList<>();
+	@OneToMany(mappedBy = "column", cascade = CascadeType.ALL, orphanRemoval = true)
+	@Builder.Default
+	private List<Card> cards = new ArrayList<>();
 }

@@ -18,29 +18,29 @@ import java.util.Set;
 @Builder
 public class Label {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
 
-    @Column(nullable = false, length = 100)
-    private String name;
+	@Column(nullable = false, length = 100)
+	private String name;
 
-    @Column(nullable = false, length = 50)
-    private String color;
+	@Column(nullable = false, length = 50)
+	private String color;
 
-    @Column(name = "is_preset", nullable = false)
-    @Builder.Default
-    private Boolean isPreset = false;
+	@Column(name = "is_preset", nullable = false)
+	@Builder.Default
+	private Boolean isPreset = false;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+	@CreationTimestamp
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+	@UpdateTimestamp
+	@Column(name = "updated_at", nullable = false)
+	private LocalDateTime updatedAt;
 
-    @ManyToMany(mappedBy = "labels")
-    @Builder.Default
-    private Set<Card> cards = new HashSet<>();
+	@ManyToMany(mappedBy = "labels")
+	@Builder.Default
+	private Set<Card> cards = new HashSet<>();
 }

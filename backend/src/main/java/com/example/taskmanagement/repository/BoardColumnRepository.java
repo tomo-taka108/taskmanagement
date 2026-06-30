@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface BoardColumnRepository extends JpaRepository<BoardColumn, Long> {
-    List<BoardColumn> findAllByOrderByPositionAsc();
+	List<BoardColumn> findAllByOrderByPositionAsc();
 }

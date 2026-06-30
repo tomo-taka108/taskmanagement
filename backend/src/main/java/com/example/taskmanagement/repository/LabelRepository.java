@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface LabelRepository extends JpaRepository<Label, Long> {
-    List<Label> findByIsPresetTrue();
+	List<Label> findByIsPresetTrue();
 }

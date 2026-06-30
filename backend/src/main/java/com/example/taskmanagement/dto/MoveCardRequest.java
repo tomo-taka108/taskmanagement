@@ -10,9 +10,9 @@ import lombok.Setter;
 @NoArgsConstructor
 public class MoveCardRequest {
 
-    @NotNull
-    private Long targetColumnId;
+	@NotNull
+	private Long targetColumnId;
 
-    @NotNull
-    private Integer newPosition;
+	@NotNull
+	private Integer newPosition;
 }

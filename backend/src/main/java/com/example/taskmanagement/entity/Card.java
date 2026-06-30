@@ -21,51 +21,47 @@ import java.util.Set;
 @Builder
 public class Card {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "column_id", nullable = false)
-    private BoardColumn column;
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "column_id", nullable = false)
+	private BoardColumn column;
 
-    @Column(nullable = false, length = 255)
-    private String title;
+	@Column(nullable = false, length = 255)
+	private String title;
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
+	@Column(columnDefinition = "TEXT")
+	private String description;
 
-    @Column(name = "due_date")
-    private LocalDate dueDate;
+	@Column(name = "due_date")
+	private LocalDate dueDate;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 10)
-    private Priority priority;
+	@Enumerated(EnumType.STRING)
+	@Column(length = 10)
+	private Priority priority;
 
-    @Column(length = 50)
-    private String color;
+	@Column(length = 50)
+	private String color;
 
-    @Column(nullable = false)
-    private Integer position;
+	@Column(nullable = false)
+	private Integer position;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+	@CreationTimestamp
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+	@UpdateTimestamp
+	@Column(name = "updated_at", nullable = false)
+	private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "card", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
-    private List<ChecklistItem> checklistItems = new ArrayList<>();
+	@OneToMany(mappedBy = "card", cascade = CascadeType.ALL, orphanRemoval = true)
+	@Builder.Default
+	private List<ChecklistItem> checklistItems = new ArrayList<>();
 
-    @ManyToMany
-    @JoinTable(
-        name = "card_labels",
-        joinColumns = @JoinColumn(name = "card_id"),
-        inverseJoinColumns = @JoinColumn(name = "label_id")
-    )
-    @Builder.Default
-    private Set<Label> labels = new HashSet<>();
+	@ManyToMany
+	@JoinTable(name = "card_labels", joinColumns = @JoinColumn(name = "card_id"), inverseJoinColumns = @JoinColumn(name = "label_id"))
+	@Builder.Default
+	private Set<Label> labels = new HashSet<>();
 }

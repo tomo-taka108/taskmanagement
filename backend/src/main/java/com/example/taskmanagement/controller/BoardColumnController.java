@@ -15,15 +15,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BoardColumnController {
 
-    private final BoardColumnService boardColumnService;
+	private final BoardColumnService boardColumnService;
 
-    @GetMapping
-    public List<BoardColumnResponse> getColumns() {
-        return boardColumnService.findAll();
-    }
+	@GetMapping
+	public List<BoardColumnResponse> getColumns() {
+		return boardColumnService.findAll();
+	}
 
-    @GetMapping("/{id}")
-    public BoardColumnResponse getColumn(@PathVariable Long id) {
-        return boardColumnService.findById(id);
-    }
+	@GetMapping("/{id}")
+	public BoardColumnResponse getColumn(@PathVariable Long id) {
+		return boardColumnService.findById(id);
+	}
 }

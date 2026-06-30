@@ -20,85 +20,75 @@ import java.util.NoSuchElementException;
 @Transactional(readOnly = true)
 public class CardService {
 
-    private final CardRepository cardRepository;
-    private final BoardColumnRepository boardColumnRepository;
+	private final CardRepository cardRepository;
+	private final BoardColumnRepository boardColumnRepository;
 
-    public List<CardResponse> findByColumnId(Long columnId) {
-        return cardRepository.findByColumnIdOrderByPositionAsc(columnId).stream()
-                .map(CardResponse::new)
-                .toList();
-    }
+	public List<CardResponse> findByColumnId(Long columnId) {
+		return cardRepository.findByColumnIdOrderByPositionAsc(columnId).stream().map(CardResponse::new).toList();
+	}
 
-    public CardResponse findById(Long id) {
-        Card card = cardRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
-        return new CardResponse(card);
-    }
+	public CardResponse findById(Long id) {
+		Card card = cardRepository.findById(id).orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
+		return new CardResponse(card);
+	}
 
-    @Transactional
-    public CardResponse create(Long columnId, CreateCardRequest request) {
-        BoardColumn column = boardColumnRepository.findById(columnId)
-                .orElseThrow(() -> new NoSuchElementException("Column not found: " + columnId));
+	@Transactional
+	public CardResponse create(Long columnId, CreateCardRequest request) {
+		BoardColumn column = boardColumnRepository.findById(columnId)
+				.orElseThrow(() -> new NoSuchElementException("Column not found: " + columnId));
 
-        int nextPosition = cardRepository.findMaxPositionByColumnId(columnId)
-                .map(max -> max + 1)
-                .orElse(1);
+		int nextPosition = cardRepository.findMaxPositionByColumnId(columnId).map(max -> max + 1).orElse(1);
 
-        Card card = Card.builder()
-                .column(column)
-                .title(request.getTitle())
-                .description(request.getDescription())
-                .priority(request.getPriority())
-                .dueDate(request.getDueDate())
-                .position(nextPosition)
-                .build();
+		Card card = Card.builder().column(column).title(request.getTitle()).description(request.getDescription())
+				.priority(request.getPriority()).dueDate(request.getDueDate()).position(nextPosition).build();
 
-        return new CardResponse(cardRepository.save(card));
-    }
+		return new CardResponse(cardRepository.save(card));
+	}
 
-    @Transactional
-    public CardResponse update(Long id, UpdateCardRequest request) {
-        Card card = cardRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
+	@Transactional
+	public CardResponse update(Long id, UpdateCardRequest request) {
+		Card card = cardRepository.findById(id).orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
 
-        if (request.getTitle() != null) card.setTitle(request.getTitle());
-        if (request.getDescription() != null) card.setDescription(request.getDescription());
-        if (request.getPriority() != null) card.setPriority(request.getPriority());
-        if (request.getDueDate() != null) card.setDueDate(request.getDueDate());
+		if (request.getTitle() != null)
+			card.setTitle(request.getTitle());
+		if (request.getDescription() != null)
+			card.setDescription(request.getDescription());
+		if (request.getPriority() != null)
+			card.setPriority(request.getPriority());
+		if (request.getDueDate() != null)
+			card.setDueDate(request.getDueDate());
 
-        return new CardResponse(cardRepository.save(card));
-    }
+		return new CardResponse(cardRepository.save(card));
+	}
 
-    @Transactional
-    public void delete(Long id) {
-        Card card = cardRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
-        cardRepository.shiftPositionsDown(card.getColumn().getId(), card.getPosition());
-        cardRepository.delete(card);
-    }
+	@Transactional
+	public void delete(Long id) {
+		Card card = cardRepository.findById(id).orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
+		cardRepository.shiftPositionsDown(card.getColumn().getId(), card.getPosition());
+		cardRepository.delete(card);
+	}
 
-    @Transactional
-    public CardResponse move(Long id, MoveCardRequest request) {
-        Card card = cardRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
+	@Transactional
+	public CardResponse move(Long id, MoveCardRequest request) {
+		Card card = cardRepository.findById(id).orElseThrow(() -> new NoSuchElementException("Card not found: " + id));
 
-        Long sourceColumnId = card.getColumn().getId();
-        Long targetColumnId = request.getTargetColumnId();
-        int newPosition = request.getNewPosition();
+		Long sourceColumnId = card.getColumn().getId();
+		Long targetColumnId = request.getTargetColumnId();
+		int newPosition = request.getNewPosition();
 
-        // 元の位置より後ろをつめる
-        cardRepository.shiftPositionsDown(sourceColumnId, card.getPosition());
+		// 元の位置より後ろをつめる
+		cardRepository.shiftPositionsDown(sourceColumnId, card.getPosition());
 
-        if (!sourceColumnId.equals(targetColumnId)) {
-            BoardColumn targetColumn = boardColumnRepository.findById(targetColumnId)
-                    .orElseThrow(() -> new NoSuchElementException("Column not found: " + targetColumnId));
-            card.setColumn(targetColumn);
-        }
+		if (!sourceColumnId.equals(targetColumnId)) {
+			BoardColumn targetColumn = boardColumnRepository.findById(targetColumnId)
+					.orElseThrow(() -> new NoSuchElementException("Column not found: " + targetColumnId));
+			card.setColumn(targetColumn);
+		}
 
-        // 挿入位置より後ろをずらす
-        cardRepository.shiftPositionsUp(targetColumnId, newPosition);
+		// 挿入位置より後ろをずらす
+		cardRepository.shiftPositionsUp(targetColumnId, newPosition);
 
-        card.setPosition(newPosition);
-        return new CardResponse(cardRepository.save(card));
-    }
+		card.setPosition(newPosition);
+		return new CardResponse(cardRepository.save(card));
+	}
 }
