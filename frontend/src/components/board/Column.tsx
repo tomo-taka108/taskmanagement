@@ -2,21 +2,30 @@ import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { BoardColumnResponse, CardResponse } from '../../types/api';
+import type { DropIndicatorInfo } from './BoardView';
 import { CardList } from './CardList';
 import { AddCardForm } from '../card/AddCardForm';
 
 interface Props {
   column: BoardColumnResponse;
   onCardClick: (card: CardResponse) => void;
+  dropIndicator?: DropIndicatorInfo | null;
+  activeCardId?: number | null;
 }
 
-export function Column({ column, onCardClick }: Props) {
+export function Column({ column, onCardClick, dropIndicator, activeCardId }: Props) {
   const [isAdding, setIsAdding] = useState(false);
 
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   const sortedCards = [...column.cards].sort((a, b) => a.position - b.position);
   const allCardIds  = sortedCards.map((c) => c.id);
+
+  // このカラムが drop 先で、かつカードではなくカラム全体がターゲットのとき末尾にインジケーターを表示
+  const showBottomIndicator =
+    dropIndicator?.overColumnId === column.id &&
+    dropIndicator.isOverColumn &&
+    sortedCards.length > 0;
 
   return (
     <div
@@ -39,7 +48,14 @@ export function Column({ column, onCardClick }: Props) {
 
       <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
         <div ref={setNodeRef} className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
-          <CardList cards={sortedCards} onCardClick={onCardClick} />
+          <CardList
+            cards={sortedCards}
+            onCardClick={onCardClick}
+            dropIndicator={dropIndicator}
+            activeCardId={activeCardId}
+            columnId={column.id}
+          />
+          {showBottomIndicator && <DropLine />}
         </div>
       </SortableContext>
 
@@ -55,5 +71,14 @@ export function Column({ column, onCardClick }: Props) {
         </button>
       )}
     </div>
+  );
+}
+
+export function DropLine() {
+  return (
+    <div
+      className="rounded-full mx-1"
+      style={{ height: '3px', backgroundColor: '#3b82f6', boxShadow: '0 0 6px rgba(59,130,246,0.6)' }}
+    />
   );
 }

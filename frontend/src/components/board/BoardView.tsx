@@ -18,6 +18,12 @@ import { CardItem } from '../card/CardItem';
 import { CardDetailModal } from '../card/CardDetailModal';
 import type { BoardColumnResponse, CardResponse } from '../../types/api';
 
+export interface DropIndicatorInfo {
+  overCardId: number | null;
+  overColumnId: number | null;
+  isOverColumn: boolean;
+}
+
 function byPos(cards: CardResponse[]) {
   return [...cards].sort((a, b) => a.position - b.position);
 }
@@ -36,6 +42,7 @@ export function BoardView() {
   const [activeCard, setActiveCard]     = useState<CardResponse | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardResponse | null>(null);
   const [isDragging, setIsDragging]     = useState(false);
+  const [dropIndicator, setDropIndicator] = useState<DropIndicatorInfo | null>(null);
   const draggingRef = useRef(false);
 
   // store が更新されたとき（D&D後の確定 or 外部更新）に同期
@@ -52,6 +59,7 @@ export function BoardView() {
   const handleDragStart = (event: DragStartEvent) => {
     draggingRef.current = true;
     setIsDragging(true);
+    setDropIndicator(null);
     const activeId = Number(event.active.id);
     // ドラッグ開始時に store のスナップショットを localColumns に取る
     const snap = columns.map((c) => ({ ...c, cards: [...c.cards] }));
@@ -62,11 +70,28 @@ export function BoardView() {
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    if (!over) return;
+    if (!over) {
+      setDropIndicator(null);
+      return;
+    }
 
     const activeId = Number(active.id);
     const overId   = Number(over.id);
-    if (activeId === overId) return;
+    if (activeId === overId) {
+      setDropIndicator(null);
+      return;
+    }
+
+    // ドロップインジケーター更新
+    const isOverColId = localColumns.some((c) => c.id === overId);
+    const overColId   = isOverColId
+      ? overId
+      : (localColumns.find((c) => c.cards.some((card) => card.id === overId))?.id ?? null);
+    setDropIndicator({
+      overCardId: isOverColId ? null : overId,
+      overColumnId: overColId,
+      isOverColumn: isOverColId,
+    });
 
     setLocalColumns((cols) => {
       const activeCol = colOfCard(cols, activeId);
@@ -125,6 +150,7 @@ export function BoardView() {
   const handleDragEnd = (event: DragEndEvent) => {
     draggingRef.current = false;
     setIsDragging(false);
+    setDropIndicator(null);
     const { active, over } = event;
     setActiveCard(null);
 
@@ -203,6 +229,8 @@ export function BoardView() {
             onCardClick={(card) => {
               if (!isDragging) setSelectedCard(card);
             }}
+            dropIndicator={isDragging ? dropIndicator : null}
+            activeCardId={activeCard?.id ?? null}
           />
         ))}
       </div>
