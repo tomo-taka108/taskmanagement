@@ -15,9 +15,10 @@ interface Props {
   dropIndicator?: DropIndicatorInfo | null;
   activeCardId?: number | null;
   isColumnDragging?: boolean;
+  isColumnOver?: boolean;
 }
 
-export function Column({ column, onCardClick, dropIndicator, activeCardId, isColumnDragging }: Props) {
+export function Column({ column, onCardClick, dropIndicator, activeCardId, isColumnDragging, isColumnOver }: Props) {
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
@@ -25,27 +26,18 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId, isCol
 
   const { updateColumnAsync, deleteColumnAsync } = useBoardStore();
 
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: column.id });
+  // カードD&D用ドロップゾーン（カラムの数値ID）
+  const { setNodeRef: setCardDropRef } = useDroppable({ id: column.id });
 
+  // カラムD&D用ソータブル（col-{id}）
   const {
     attributes,
     listeners,
     setNodeRef: setSortableRef,
     transform,
     transition,
-    isDragging,
+    isDragging: isThisColumnDragging,
   } = useSortable({ id: `col-${column.id}` });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
-  const setNodeRef = (el: HTMLElement | null) => {
-    setSortableRef(el);
-    setDropRef(el);
-  };
 
   useEffect(() => {
     if (isEditing) inputRef.current?.focus();
@@ -55,6 +47,7 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId, isCol
   const allCardIds  = sortedCards.map((c) => c.id);
 
   const showBottomIndicator =
+    !isColumnDragging &&
     dropIndicator?.overColumnId === column.id &&
     dropIndicator.isOverColumn &&
     sortedCards.length > 0;
@@ -87,19 +80,34 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId, isCol
     await deleteColumnAsync(column.id);
   };
 
+  const wrapperStyle: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    // ドラッグ中の元カラムは非表示にするが幅は確保
+    visibility: isThisColumnDragging ? 'hidden' : 'visible',
+  };
+
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex flex-col rounded-lg w-72 shrink-0 p-3 gap-3 transition-colors"
-      {...attributes}
-    >
+    // outline-none でブラウザのデフォルトフォーカスアウトラインを消す
+    <div ref={setSortableRef} style={wrapperStyle} className="shrink-0 w-72 outline-none" {...attributes}>
       <div
-        className="flex flex-col rounded-lg w-72 shrink-0 p-3 gap-3 transition-colors"
-        style={{
-          backgroundColor: isOver ? 'var(--color-border)' : 'var(--color-bg-column)',
-        }}
+        className="flex flex-col rounded-lg p-3 gap-3 relative"
+        style={{ backgroundColor: 'var(--color-bg-column)' }}
       >
+        {/* Trello風: over中のカラムに薄い黒オーバーレイ */}
+        {isColumnOver && !isThisColumnDragging && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '0.5rem',
+              backgroundColor: 'rgba(0,0,0,0.14)',
+              pointerEvents: 'none',
+              zIndex: 10,
+            }}
+          />
+        )}
+
         <div className="flex items-center gap-1 px-1">
           {/* ドラッグハンドル */}
           <button
@@ -115,7 +123,6 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId, isCol
             </svg>
           </button>
 
-          {/* タイトル（インライン編集） */}
           {isEditing ? (
             <input
               ref={inputRef}
@@ -124,10 +131,7 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId, isCol
               onBlur={handleTitleSave}
               onKeyDown={handleTitleKeyDown}
               className="flex-1 text-xl font-semibold bg-transparent border-b outline-none min-w-0"
-              style={{
-                color: 'var(--color-text-main)',
-                borderColor: 'var(--color-text-sub)',
-              }}
+              style={{ color: 'var(--color-text-main)', borderColor: 'var(--color-text-sub)' }}
             />
           ) : (
             <h2
@@ -147,7 +151,6 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId, isCol
             {column.cards.length}
           </span>
 
-          {/* 削除ボタン */}
           <button
             onClick={handleDelete}
             className="shrink-0 p-0.5 rounded hover:brightness-90 transition-all"
@@ -163,18 +166,21 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId, isCol
           </button>
         </div>
 
-        <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
-            <CardList
-              cards={sortedCards}
-              onCardClick={onCardClick}
-              dropIndicator={dropIndicator}
-              activeCardId={activeCardId}
-              columnId={column.id}
-            />
-            {showBottomIndicator && <DropLine />}
-          </div>
-        </SortableContext>
+        {/* カードD&Dのドロップゾーン（数値IDをここだけに集約） */}
+        <div ref={setCardDropRef}>
+          <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
+              <CardList
+                cards={sortedCards}
+                onCardClick={onCardClick}
+                dropIndicator={isColumnDragging ? null : dropIndicator}
+                activeCardId={activeCardId}
+                columnId={column.id}
+              />
+              {showBottomIndicator && <DropLine />}
+            </div>
+          </SortableContext>
+        </div>
 
         {isAdding ? (
           <AddCardForm columnId={column.id} onClose={() => setIsAdding(false)} />
