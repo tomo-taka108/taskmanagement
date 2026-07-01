@@ -36,7 +36,7 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId }: Pro
       }}
     >
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-main)' }}>
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
           {column.title}
         </h2>
         <span
