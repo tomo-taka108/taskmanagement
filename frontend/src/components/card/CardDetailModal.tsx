@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useBoardStore } from '../../store/boardStore';
-import type { CardResponse, Priority } from '../../types/api';
+import type { CardResponse, ChecklistItemResponse, Priority } from '../../types/api';
 
 interface Props {
   card: CardResponse;
@@ -16,7 +16,18 @@ const PRIORITIES: { value: Priority; label: string }[] = [
 ];
 
 export function CardDetailModal({ card, onClose, onUpdated, onDeleted }: Props) {
-  const { updateCardAsync, deleteCardAsync } = useBoardStore();
+  const {
+    updateCardAsync,
+    deleteCardAsync,
+    addChecklistItemAsync,
+    updateChecklistItemAsync,
+    deleteChecklistItemAsync,
+    labels,
+    loadLabels,
+    addLabelToCardAsync,
+    removeLabelFromCardAsync,
+    columns,
+  } = useBoardStore();
 
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? '');
@@ -27,7 +38,24 @@ export function CardDetailModal({ card, onClose, onUpdated, onDeleted }: Props) 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // チェックリスト: ストアから最新のカード状態を読む
+  const currentCard = columns
+    .flatMap((col) => col.cards)
+    .find((c) => c.id === card.id) ?? card;
+  const checklistItems = currentCard.checklistItems;
+  const cardLabels = currentCard.labels;
+
+  const [newItemText, setNewItemText] = useState('');
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editingItemText, setEditingItemText] = useState('');
+
   const overlayRef = useRef<HTMLDivElement>(null);
+  const newItemInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadLabels();
+  }, [loadLabels]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -77,9 +105,53 @@ export function CardDetailModal({ card, onClose, onUpdated, onDeleted }: Props) 
     }
   };
 
-  const columnName = useBoardStore
-    .getState()
-    .columns.find((c) => c.id === card.columnId)?.title ?? '';
+  const handleAddChecklistItem = async () => {
+    const text = newItemText.trim();
+    if (!text) return;
+    setIsAddingItem(true);
+    try {
+      await addChecklistItemAsync(card.id, text);
+      setNewItemText('');
+      newItemInputRef.current?.focus();
+    } finally {
+      setIsAddingItem(false);
+    }
+  };
+
+  const handleToggleItem = async (item: ChecklistItemResponse) => {
+    await updateChecklistItemAsync(card.id, item.id, { completed: !item.completed });
+  };
+
+  const handleStartEditItem = (item: ChecklistItemResponse) => {
+    setEditingItemId(item.id);
+    setEditingItemText(item.text);
+  };
+
+  const handleSaveEditItem = async (itemId: number) => {
+    const text = editingItemText.trim();
+    if (text) {
+      await updateChecklistItemAsync(card.id, itemId, { text });
+    }
+    setEditingItemId(null);
+  };
+
+  const handleDeleteChecklistItem = async (itemId: number) => {
+    await deleteChecklistItemAsync(card.id, itemId);
+  };
+
+  const handleToggleLabel = async (labelId: number) => {
+    const hasLabel = cardLabels.some((l) => l.id === labelId);
+    if (hasLabel) {
+      await removeLabelFromCardAsync(card.id, card.columnId, labelId);
+    } else {
+      await addLabelToCardAsync(card.id, card.columnId, labelId);
+    }
+  };
+
+  const columnName = columns.find((c) => c.id === card.columnId)?.title ?? '';
+
+  const completedCount = checklistItems.filter((i) => i.completed).length;
+  const totalCount = checklistItems.length;
 
   return (
     <div
@@ -89,7 +161,7 @@ export function CardDetailModal({ card, onClose, onUpdated, onDeleted }: Props) 
       onClick={handleOverlayClick}
     >
       <div
-        className="relative w-full max-w-lg rounded-xl shadow-2xl p-6 flex flex-col gap-4 overflow-hidden"
+        className="relative w-full max-w-lg rounded-xl shadow-2xl p-6 flex flex-col gap-4 overflow-y-auto max-h-[90vh]"
         style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-main)' }}
       >
         {/* ヘッダー */}
@@ -128,7 +200,7 @@ export function CardDetailModal({ card, onClose, onUpdated, onDeleted }: Props) 
               color: 'var(--color-text-main)',
               border: '1px solid var(--color-border)',
             }}
-            rows={4}
+            rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="説明を入力..."
@@ -177,25 +249,143 @@ export function CardDetailModal({ card, onClose, onUpdated, onDeleted }: Props) 
           />
         </div>
 
-        {/* ラベル表示（読み取り専用） */}
-        {card.labels.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium" style={{ color: 'var(--color-text-sub)' }}>
+        {/* ラベル */}
+        {labels.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium" style={{ color: 'var(--color-text-sub)' }}>
               ラベル
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {card.labels.map((label) => (
-                <span
-                  key={label.id}
-                  className="text-xs px-2 py-0.5 rounded-full font-medium text-white"
-                  style={{ backgroundColor: label.color }}
-                >
-                  {label.name}
-                </span>
-              ))}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {labels.map((label) => {
+                const isSelected = cardLabels.some((l) => l.id === label.id);
+                return (
+                  <button
+                    key={label.id}
+                    onClick={() => handleToggleLabel(label.id)}
+                    className="text-xs px-3 py-1 rounded-full font-medium transition-all"
+                    style={{
+                      backgroundColor: isSelected ? label.color : 'var(--color-bg-column)',
+                      color: isSelected ? '#fff' : 'var(--color-text-main)',
+                      border: `2px solid ${label.color}`,
+                      opacity: 1,
+                    }}
+                  >
+                    {label.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
+
+        {/* チェックリスト */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium" style={{ color: 'var(--color-text-sub)' }}>
+              チェックリスト
+              {totalCount > 0 && (
+                <span className="ml-2 font-normal">
+                  {completedCount}/{totalCount}
+                </span>
+              )}
+            </label>
+          </div>
+
+          {/* 進捗バー */}
+          {totalCount > 0 && (
+            <div
+              className="h-1.5 w-full rounded-full overflow-hidden"
+              style={{ backgroundColor: 'var(--color-border)' }}
+            >
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${Math.round((completedCount / totalCount) * 100)}%`,
+                  backgroundColor: completedCount === totalCount ? '#22c55e' : '#3b82f6',
+                }}
+              />
+            </div>
+          )}
+
+          {/* アイテム一覧 */}
+          <ul className="flex flex-col gap-1">
+            {[...checklistItems]
+              .sort((a, b) => a.position - b.position)
+              .map((item) => (
+                <li key={item.id} className="flex items-center gap-2 group">
+                  <input
+                    type="checkbox"
+                    checked={item.completed}
+                    onChange={() => handleToggleItem(item)}
+                    className="shrink-0 w-4 h-4 cursor-pointer accent-blue-500"
+                  />
+                  {editingItemId === item.id ? (
+                    <input
+                      className="flex-1 text-sm bg-transparent border-b outline-none focus:border-blue-500"
+                      style={{
+                        borderColor: 'var(--color-border)',
+                        color: 'var(--color-text-main)',
+                      }}
+                      value={editingItemText}
+                      onChange={(e) => setEditingItemText(e.target.value)}
+                      onBlur={() => handleSaveEditItem(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveEditItem(item.id);
+                        if (e.key === 'Escape') setEditingItemId(null);
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      className="flex-1 text-sm cursor-pointer"
+                      style={{
+                        color: item.completed ? 'var(--color-text-sub)' : 'var(--color-text-main)',
+                        textDecoration: item.completed ? 'line-through' : 'none',
+                      }}
+                      onClick={() => handleStartEditItem(item)}
+                    >
+                      {item.text}
+                    </span>
+                  )}
+                  <button
+                    className="text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500"
+                    style={{ color: 'var(--color-text-sub)' }}
+                    onClick={() => handleDeleteChecklistItem(item.id)}
+                    aria-label="削除"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+          </ul>
+
+          {/* アイテム追加 */}
+          <div className="flex gap-2 mt-1">
+            <input
+              ref={newItemInputRef}
+              className="flex-1 text-sm rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500"
+              style={{
+                backgroundColor: 'var(--color-bg-column)',
+                color: 'var(--color-text-main)',
+                border: '1px solid var(--color-border)',
+              }}
+              value={newItemText}
+              onChange={(e) => setNewItemText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddChecklistItem();
+              }}
+              placeholder="アイテムを追加..."
+            />
+            <button
+              className="px-3 py-1 text-sm rounded-md font-medium text-white disabled:opacity-60"
+              style={{ backgroundColor: 'var(--color-bg-header)' }}
+              onClick={handleAddChecklistItem}
+              disabled={isAddingItem || !newItemText.trim()}
+            >
+              追加
+            </button>
+          </div>
+        </div>
 
         {/* エラー */}
         {error && (

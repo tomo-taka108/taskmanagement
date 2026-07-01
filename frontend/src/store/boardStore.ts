@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { BoardColumnResponse, CardResponse, CreateCardRequest, CreateColumnRequest, FilterState, MoveCardRequest, ReorderColumnsRequest, UpdateCardRequest, UpdateColumnRequest } from '../types/api';
-import { createCard, createColumn, deleteCard, deleteColumn, fetchColumns, moveCard, reorderColumns, updateCard, updateColumn } from '../api/client';
+import type { BoardColumnResponse, CardResponse, ChecklistItemResponse, CreateCardRequest, CreateColumnRequest, FilterState, LabelResponse, MoveCardRequest, ReorderColumnsRequest, UpdateCardRequest, UpdateColumnRequest } from '../types/api';
+import { addLabelToCard, createCard, createChecklistItem, createColumn, deleteCard, deleteChecklistItem, deleteColumn, fetchColumns, fetchLabels, moveCard, removeLabelFromCard, reorderColumns, updateCard, updateChecklistItem, updateColumn } from '../api/client';
 
 const initialFilter: FilterState = {
   keyword: '',
@@ -24,6 +24,15 @@ interface BoardStore {
   deleteColumnAsync: (id: number) => Promise<void>;
   reorderColumnsAsync: (data: ReorderColumnsRequest) => Promise<void>;
 
+  addChecklistItemAsync: (cardId: number, text: string) => Promise<ChecklistItemResponse>;
+  updateChecklistItemAsync: (cardId: number, itemId: number, data: { text?: string; completed?: boolean }) => Promise<void>;
+  deleteChecklistItemAsync: (cardId: number, itemId: number) => Promise<void>;
+
+  labels: LabelResponse[];
+  loadLabels: () => Promise<void>;
+  addLabelToCardAsync: (cardId: number, columnId: number, labelId: number) => Promise<void>;
+  removeLabelFromCardAsync: (cardId: number, columnId: number, labelId: number) => Promise<void>;
+
   filter: FilterState;
   setKeyword: (keyword: string) => void;
   setLabelId: (labelId: string) => void;
@@ -34,6 +43,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   columns: [],
   isLoading: false,
   error: null,
+  labels: [],
 
   loadBoard: async () => {
     set({ isLoading: true, error: null });
@@ -128,6 +138,88 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       const columns = await fetchColumns();
       set({ columns: [...columns].sort((a, b) => a.position - b.position) });
     }
+  },
+
+  addChecklistItemAsync: async (cardId, text) => {
+    const item = await createChecklistItem(cardId, text);
+    set((s) => ({
+      columns: s.columns.map((col) => ({
+        ...col,
+        cards: col.cards.map((c) =>
+          c.id === cardId
+            ? { ...c, checklistItems: [...c.checklistItems, item] }
+            : c
+        ),
+      })),
+    }));
+    return item;
+  },
+
+  updateChecklistItemAsync: async (cardId, itemId, data) => {
+    const updated = await updateChecklistItem(itemId, data);
+    set((s) => ({
+      columns: s.columns.map((col) => ({
+        ...col,
+        cards: col.cards.map((c) =>
+          c.id === cardId
+            ? {
+                ...c,
+                checklistItems: c.checklistItems.map((item) =>
+                  item.id === itemId ? updated : item
+                ),
+              }
+            : c
+        ),
+      })),
+    }));
+  },
+
+  deleteChecklistItemAsync: async (cardId, itemId) => {
+    await deleteChecklistItem(itemId);
+    set((s) => ({
+      columns: s.columns.map((col) => ({
+        ...col,
+        cards: col.cards.map((c) =>
+          c.id === cardId
+            ? { ...c, checklistItems: c.checklistItems.filter((item) => item.id !== itemId) }
+            : c
+        ),
+      })),
+    }));
+  },
+
+  loadLabels: async () => {
+    const labels = await fetchLabels();
+    set({ labels });
+  },
+
+  addLabelToCardAsync: async (cardId, columnId, labelId) => {
+    const updated = await addLabelToCard(cardId, labelId);
+    set((s) => ({
+      columns: s.columns.map((col) =>
+        col.id === columnId
+          ? { ...col, cards: col.cards.map((c) => (c.id === cardId ? updated : c)) }
+          : col
+      ),
+    }));
+  },
+
+  removeLabelFromCardAsync: async (cardId, columnId, labelId) => {
+    await removeLabelFromCard(cardId, labelId);
+    set((s) => ({
+      columns: s.columns.map((col) =>
+        col.id === columnId
+          ? {
+              ...col,
+              cards: col.cards.map((c) =>
+                c.id === cardId
+                  ? { ...c, labels: c.labels.filter((l) => l.id !== labelId) }
+                  : c
+              ),
+            }
+          : col
+      ),
+    }));
   },
 
   filter: initialFilter,
