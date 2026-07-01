@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { BoardColumnResponse, CardResponse } from '../../types/api';
+import type { DropIndicatorInfo } from './BoardView';
 import { CardList } from './CardList';
 import { AddCardForm } from '../card/AddCardForm';
 
 interface Props {
   column: BoardColumnResponse;
   onCardClick: (card: CardResponse) => void;
+  dropIndicator?: DropIndicatorInfo | null;
+  activeCardId?: number | null;
 }
 
-export function Column({ column, onCardClick }: Props) {
+export function Column({ column, onCardClick, dropIndicator, activeCardId }: Props) {
   const [isAdding, setIsAdding] = useState(false);
 
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
@@ -18,15 +21,22 @@ export function Column({ column, onCardClick }: Props) {
   const sortedCards = [...column.cards].sort((a, b) => a.position - b.position);
   const allCardIds  = sortedCards.map((c) => c.id);
 
+  // このカラムが drop 先で、かつカードではなくカラム全体がターゲットのとき末尾にインジケーターを表示
+  const showBottomIndicator =
+    dropIndicator?.overColumnId === column.id &&
+    dropIndicator.isOverColumn &&
+    sortedCards.length > 0;
+
   return (
     <div
+      ref={setNodeRef}
       className="flex flex-col rounded-lg w-72 shrink-0 p-3 gap-3 transition-colors"
       style={{
         backgroundColor: isOver ? 'var(--color-border)' : 'var(--color-bg-column)',
       }}
     >
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-main)' }}>
+        <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text-main)' }}>
           {column.title}
         </h2>
         <span
@@ -38,8 +48,15 @@ export function Column({ column, onCardClick }: Props) {
       </div>
 
       <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
-          <CardList cards={sortedCards} onCardClick={onCardClick} />
+        <div className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
+          <CardList
+            cards={sortedCards}
+            onCardClick={onCardClick}
+            dropIndicator={dropIndicator}
+            activeCardId={activeCardId}
+            columnId={column.id}
+          />
+          {showBottomIndicator && <DropLine />}
         </div>
       </SortableContext>
 
@@ -55,5 +72,14 @@ export function Column({ column, onCardClick }: Props) {
         </button>
       )}
     </div>
+  );
+}
+
+export function DropLine() {
+  return (
+    <div
+      className="rounded-full mx-1"
+      style={{ height: '3px', backgroundColor: '#3b82f6', boxShadow: '0 0 6px rgba(59,130,246,0.6)' }}
+    />
   );
 }
