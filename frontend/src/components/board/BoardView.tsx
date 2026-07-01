@@ -3,12 +3,14 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
-  rectIntersection,
+  pointerWithin,
+  closestCenter,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useBoardStore } from '../../store/boardStore';
@@ -22,7 +24,15 @@ export interface DropIndicatorInfo {
   overCardId: number | null;
   overColumnId: number | null;
   isOverColumn: boolean;
+  // 同カラム内で下方向へのドラッグ時: overCard の「後」に線を出す
+  insertAfter: boolean;
 }
+
+// pointerWithin で最初に試し、ヒットがなければ closestCenter にフォールバック
+const collisionDetection: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCenter(args);
+};
 
 function byPos(cards: CardResponse[]) {
   return [...cards].sort((a, b) => a.position - b.position);
@@ -36,8 +46,6 @@ export function BoardView() {
   const { isLoading, error, loadBoard, moveCardAsync, columns, setColumns } = useBoardStore();
   const filteredColumns = useFilteredBoard();
 
-  // D&D中の表示は store を触らず localColumns で管理する
-  // → DndContext が unmount されないのでクラッシュが起きない
   const [localColumns, setLocalColumns] = useState<BoardColumnResponse[]>(columns);
   const [activeCard, setActiveCard]     = useState<CardResponse | null>(null);
   const [selectedCard, setSelectedCard] = useState<CardResponse | null>(null);
@@ -45,7 +53,9 @@ export function BoardView() {
   const [dropIndicator, setDropIndicator] = useState<DropIndicatorInfo | null>(null);
   const draggingRef = useRef(false);
 
-  // store が更新されたとき（D&D後の確定 or 外部更新）に同期
+  // ドラッグ開始時点のスナップショットを保持し、インジケーター計算に使う
+  const snapRef = useRef<BoardColumnResponse[]>([]);
+
   useEffect(() => {
     if (!draggingRef.current) {
       setLocalColumns(columns);
@@ -61,8 +71,8 @@ export function BoardView() {
     setIsDragging(true);
     setDropIndicator(null);
     const activeId = Number(event.active.id);
-    // ドラッグ開始時に store のスナップショットを localColumns に取る
     const snap = columns.map((c) => ({ ...c, cards: [...c.cards] }));
+    snapRef.current = snap;
     setLocalColumns(snap);
     const card = snap.flatMap((c) => c.cards).find((c) => c.id === activeId);
     if (card) setActiveCard(card);
@@ -82,68 +92,32 @@ export function BoardView() {
       return;
     }
 
-    // ドロップインジケーター更新
-    const isOverColId = localColumns.some((c) => c.id === overId);
+    // スナップショット（ドラッグ開始時点の並び順）でカラムを判定する
+    // → 楽観的更新と無関係にインジケーター位置を計算できる
+    const snap = snapRef.current;
+    const isOverColId = snap.some((c) => c.id === overId);
     const overColId   = isOverColId
       ? overId
-      : (localColumns.find((c) => c.cards.some((card) => card.id === overId))?.id ?? null);
+      : (snap.find((c) => c.cards.some((card) => card.id === overId))?.id ?? null);
+
+    // 同カラム内で下方向へドラッグ中かを判定して insertAfter を決める
+    let insertAfter = false;
+    if (!isOverColId && overColId !== null) {
+      const overColSnap = snap.find((c) => c.id === overColId);
+      const activeColSnap = snap.find((c) => c.cards.some((card) => card.id === activeId));
+      if (overColSnap && activeColSnap && overColSnap.id === activeColSnap.id) {
+        const sorted = byPos(overColSnap.cards);
+        const activeIdx = sorted.findIndex((c) => c.id === activeId);
+        const overIdx   = sorted.findIndex((c) => c.id === overId);
+        insertAfter = activeIdx < overIdx;
+      }
+    }
+
     setDropIndicator({
-      overCardId: isOverColId ? null : overId,
+      overCardId:   isOverColId ? null : overId,
       overColumnId: overColId,
       isOverColumn: isOverColId,
-    });
-
-    setLocalColumns((cols) => {
-      const activeCol = colOfCard(cols, activeId);
-      if (!activeCol) return cols;
-
-      const isOverCol = cols.some((c) => c.id === overId);
-      const overCol   = isOverCol
-        ? cols.find((c) => c.id === overId)!
-        : colOfCard(cols, overId);
-      if (!overCol) return cols;
-
-      const activeSorted = byPos(activeCol.cards);
-      const activeIdx    = activeSorted.findIndex((c) => c.id === activeId);
-      if (activeIdx === -1) return cols;
-
-      if (activeCol.id === overCol.id) {
-        // 同カラム内: カラム余白は無視、カード上のみ反応
-        if (isOverCol) return cols;
-        const overIdx = activeSorted.findIndex((c) => c.id === overId);
-        if (overIdx === -1 || activeIdx === overIdx) return cols;
-
-        const reordered = arrayMove(activeSorted, activeIdx, overIdx)
-          .map((c, i) => ({ ...c, position: i + 1 }));
-        return cols.map((c) =>
-          c.id === activeCol.id ? { ...c, cards: reordered } : c
-        );
-      } else {
-        // 別カラムへ
-        const overSorted = byPos(overCol.cards);
-        const insertIdx  = isOverCol
-          ? overSorted.length
-          : (() => {
-              const idx = overSorted.findIndex((c) => c.id === overId);
-              return idx === -1 ? overSorted.length : idx;
-            })();
-
-        const movedCard      = { ...activeSorted[activeIdx], columnId: overCol.id };
-        const newActiveCards = activeSorted
-          .filter((c) => c.id !== activeId)
-          .map((c, i) => ({ ...c, position: i + 1 }));
-        const newOverCards   = [
-          ...overSorted.slice(0, insertIdx),
-          movedCard,
-          ...overSorted.slice(insertIdx),
-        ].map((c, i) => ({ ...c, position: i + 1 }));
-
-        return cols.map((c) => {
-          if (c.id === activeCol.id) return { ...c, cards: newActiveCards };
-          if (c.id === overCol.id)   return { ...c, cards: newOverCards };
-          return c;
-        });
-      }
+      insertAfter,
     });
   };
 
@@ -160,28 +134,88 @@ export function BoardView() {
     }
 
     const activeId = Number(active.id);
+    const overId   = Number(over.id);
+    const snap     = snapRef.current;
 
-    // setLocalColumns の関数形式は render 中に副作用を起こせないため
-    // localColumns の最新値を直接参照してから外で store/API を呼ぶ
-    setLocalColumns((latestLocal) => {
-      const targetCol = colOfCard(latestLocal, activeId);
-      if (!targetCol) {
-        // 失敗時は元に戻す（次の tick で store と同期）
-        setTimeout(() => setLocalColumns(columns), 0);
-        return latestLocal;
+    const activeCol = colOfCard(snap, activeId);
+    if (!activeCol) {
+      setLocalColumns(columns);
+      return;
+    }
+
+    const isOverColId = snap.some((c) => c.id === overId);
+    const overCol     = isOverColId
+      ? snap.find((c) => c.id === overId)!
+      : colOfCard(snap, overId);
+    if (!overCol) {
+      setLocalColumns(columns);
+      return;
+    }
+
+    const activeSorted = byPos(activeCol.cards);
+    const activeIdx    = activeSorted.findIndex((c) => c.id === activeId);
+    if (activeIdx === -1) {
+      setLocalColumns(columns);
+      return;
+    }
+
+    let newCols: BoardColumnResponse[];
+
+    if (activeCol.id === overCol.id) {
+      // 同カラム内並び替え
+      if (isOverColId) {
+        // カラム余白にドロップ → 末尾へ
+        const reordered = [
+          ...activeSorted.filter((c) => c.id !== activeId),
+          activeSorted[activeIdx],
+        ].map((c, i) => ({ ...c, position: i + 1 }));
+        newCols = snap.map((c) =>
+          c.id === activeCol.id ? { ...c, cards: reordered } : c
+        );
+      } else {
+        const overIdx = activeSorted.findIndex((c) => c.id === overId);
+        if (overIdx === -1 || activeIdx === overIdx) {
+          setLocalColumns(columns);
+          return;
+        }
+        const reordered = arrayMove(activeSorted, activeIdx, overIdx)
+          .map((c, i) => ({ ...c, position: i + 1 }));
+        newCols = snap.map((c) =>
+          c.id === activeCol.id ? { ...c, cards: reordered } : c
+        );
       }
+    } else {
+      // 別カラムへ移動
+      const overSorted = byPos(overCol.cards);
+      const insertIdx  = isOverColId
+        ? overSorted.length
+        : (() => {
+            const idx = overSorted.findIndex((c) => c.id === overId);
+            return idx === -1 ? overSorted.length : idx;
+          })();
 
-      const sorted      = byPos(targetCol.cards);
-      const newPosition = sorted.findIndex((c) => c.id === activeId) + 1;
+      const movedCard      = { ...activeSorted[activeIdx], columnId: overCol.id };
+      const newActiveCards = activeSorted
+        .filter((c) => c.id !== activeId)
+        .map((c, i) => ({ ...c, position: i + 1 }));
+      const newOverCards   = [
+        ...overSorted.slice(0, insertIdx),
+        movedCard,
+        ...overSorted.slice(insertIdx),
+      ].map((c, i) => ({ ...c, position: i + 1 }));
 
-      // render フェーズの外で store と API を呼ぶ
-      setTimeout(() => {
-        setColumns(() => latestLocal);
-        moveCardAsync(activeId, { targetColumnId: targetCol.id, newPosition });
-      }, 0);
+      newCols = snap.map((c) => {
+        if (c.id === activeCol.id) return { ...c, cards: newActiveCards };
+        if (c.id === overCol.id)   return { ...c, cards: newOverCards };
+        return c;
+      });
+    }
 
-      return latestLocal;
-    });
+    setLocalColumns(newCols);
+    const targetCol  = colOfCard(newCols, activeId)!;
+    const newPosition = byPos(targetCol.cards).findIndex((c) => c.id === activeId) + 1;
+    setColumns(() => newCols);
+    moveCardAsync(activeId, { targetColumnId: targetCol.id, newPosition });
   };
 
   if (isLoading && columns.length === 0) {
@@ -210,13 +244,12 @@ export function BoardView() {
     );
   }
 
-  // ドラッグ中は localColumns（フィルター無効）、それ以外は filteredColumns を使う
   const displayColumns = isDragging ? localColumns : filteredColumns;
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={rectIntersection}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}

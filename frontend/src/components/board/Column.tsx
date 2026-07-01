@@ -29,6 +29,7 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId }: Pro
 
   return (
     <div
+      ref={setNodeRef}
       className="flex flex-col rounded-lg w-72 shrink-0 p-3 gap-3 transition-colors"
       style={{
         backgroundColor: isOver ? 'var(--color-border)' : 'var(--color-bg-column)',
@@ -47,7 +48,7 @@ export function Column({ column, onCardClick, dropIndicator, activeCardId }: Pro
       </div>
 
       <SortableContext items={allCardIds} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
+        <div className="flex flex-col gap-2" style={{ minHeight: '60px' }}>
           <CardList
             cards={sortedCards}
             onCardClick={onCardClick}

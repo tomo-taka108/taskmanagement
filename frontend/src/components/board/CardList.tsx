@@ -15,22 +15,25 @@ export function CardList({ cards, onCardClick, dropIndicator, activeCardId, colu
   return (
     <>
       {cards.map((card) => {
-        const isActive = card.id === activeCardId;
-
-        // ドラッグ中のカード自身の直前には表示しない。それ以外で over されているカードの直前に表示する。
-        const showBeforeIndicator =
+        const isActive  = card.id === activeCardId;
+        const isTarget  =
           !isActive &&
           dropIndicator?.overCardId === card.id &&
           dropIndicator.overColumnId === columnId &&
           !dropIndicator.isOverColumn;
 
+        // insertAfter=false → このカードの前に線、insertAfter=true → このカードの後に線
+        const showBefore = isTarget && !dropIndicator!.insertAfter;
+        const showAfter  = isTarget && dropIndicator!.insertAfter;
+
         return (
           <div key={card.id}>
-            {showBeforeIndicator && <DropLine />}
+            {showBefore && <DropLine />}
             <CardItem
               card={card}
               onClick={() => onCardClick(card)}
             />
+            {showAfter && <DropLine />}
           </div>
         );
       })}
