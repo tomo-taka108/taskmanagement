@@ -52,6 +52,18 @@ export interface MoveCardRequest {
   newPosition: number;
 }
 
+export interface CreateColumnRequest {
+  title: string;
+}
+
+export interface UpdateColumnRequest {
+  title: string;
+}
+
+export interface ReorderColumnsRequest {
+  columnIds: number[];
+}
+
 export type DueFilter = '' | 'overdue' | 'this-week';
 
 export interface FilterState {

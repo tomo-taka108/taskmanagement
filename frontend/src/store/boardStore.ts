@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { BoardColumnResponse, CardResponse, CreateCardRequest, FilterState, MoveCardRequest, UpdateCardRequest } from '../types/api';
-import { createCard, deleteCard, fetchColumns, moveCard, updateCard } from '../api/client';
+import type { BoardColumnResponse, CardResponse, CreateCardRequest, CreateColumnRequest, FilterState, MoveCardRequest, ReorderColumnsRequest, UpdateCardRequest, UpdateColumnRequest } from '../types/api';
+import { createCard, createColumn, deleteCard, deleteColumn, fetchColumns, moveCard, reorderColumns, updateCard, updateColumn } from '../api/client';
 
 const initialFilter: FilterState = {
   keyword: '',
@@ -19,13 +19,18 @@ interface BoardStore {
   updateCardAsync: (cardId: number, data: UpdateCardRequest) => Promise<CardResponse>;
   deleteCardAsync: (cardId: number, columnId: number) => Promise<void>;
 
+  addColumnAsync: (data: CreateColumnRequest) => Promise<void>;
+  updateColumnAsync: (id: number, data: UpdateColumnRequest) => Promise<void>;
+  deleteColumnAsync: (id: number) => Promise<void>;
+  reorderColumnsAsync: (data: ReorderColumnsRequest) => Promise<void>;
+
   filter: FilterState;
   setKeyword: (keyword: string) => void;
   setLabelId: (labelId: string) => void;
   setDue: (due: FilterState['due']) => void;
 }
 
-export const useBoardStore = create<BoardStore>((set) => ({
+export const useBoardStore = create<BoardStore>((set, get) => ({
   columns: [],
   isLoading: false,
   error: null,
@@ -53,12 +58,9 @@ export const useBoardStore = create<BoardStore>((set) => ({
   setColumns: (updater) => set((s) => ({ columns: updater(s.columns) })),
 
   moveCardAsync: async (cardId, data) => {
-    // 楽観的更新は handleDragOver で完了済み。APIのみ呼ぶ。
-    // 失敗時はリロードで復元する。
     try {
       await moveCard(cardId, data);
     } catch {
-      // API失敗時はサーバーの正しい状態に戻す
       const columns = await fetchColumns();
       set({ columns: [...columns].sort((a, b) => a.position - b.position) });
     }
@@ -85,6 +87,47 @@ export const useBoardStore = create<BoardStore>((set) => ({
           : col
       ),
     }));
+  },
+
+  addColumnAsync: async (data) => {
+    const newColumn = await createColumn(data);
+    set((s) => ({
+      columns: [...s.columns, newColumn].sort((a, b) => a.position - b.position),
+    }));
+  },
+
+  updateColumnAsync: async (id, data) => {
+    const updated = await updateColumn(id, data);
+    set((s) => ({
+      columns: s.columns.map((col) => (col.id === id ? { ...col, title: updated.title } : col)),
+    }));
+  },
+
+  deleteColumnAsync: async (id) => {
+    await deleteColumn(id);
+    set((s) => ({
+      columns: s.columns.filter((col) => col.id !== id),
+    }));
+  },
+
+  reorderColumnsAsync: async (data) => {
+    const prevColumns = get().columns;
+    // 楽観的更新: columnIds の順番で並び替え
+    const reordered = data.columnIds
+      .map((id, idx) => {
+        const col = prevColumns.find((c) => c.id === id);
+        return col ? { ...col, position: idx + 1 } : null;
+      })
+      .filter((c): c is BoardColumnResponse => c !== null);
+    set({ columns: reordered });
+
+    try {
+      await reorderColumns(data);
+    } catch {
+      // 失敗時はサーバーの正しい状態に戻す
+      const columns = await fetchColumns();
+      set({ columns: [...columns].sort((a, b) => a.position - b.position) });
+    }
   },
 
   filter: initialFilter,
