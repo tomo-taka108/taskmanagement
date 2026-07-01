@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { BoardColumnResponse, CardResponse, CreateCardRequest, CreateColumnRequest, MoveCardRequest, ReorderColumnsRequest, UpdateCardRequest, UpdateColumnRequest } from '../types/api';
+import type { BoardColumnResponse, CardResponse, ChecklistItemResponse, CreateCardRequest, CreateColumnRequest, LabelResponse, MoveCardRequest, ReorderColumnsRequest, UpdateCardRequest, UpdateColumnRequest } from '../types/api';
 
 const apiClient = axios.create({
   baseURL: 'http://localhost:8080',
@@ -41,3 +41,29 @@ export const deleteColumn = (id: number): Promise<void> =>
 
 export const reorderColumns = (data: ReorderColumnsRequest): Promise<BoardColumnResponse[]> =>
   apiClient.put<BoardColumnResponse[]>('/api/columns/reorder', data).then((r) => r.data);
+
+// Checklist API
+export const createChecklistItem = (
+  cardId: number,
+  text: string
+): Promise<ChecklistItemResponse> =>
+  apiClient.post<ChecklistItemResponse>(`/api/cards/${cardId}/checklist-items`, { text }).then((r) => r.data);
+
+export const updateChecklistItem = (
+  itemId: number,
+  data: { text?: string; completed?: boolean }
+): Promise<ChecklistItemResponse> =>
+  apiClient.patch<ChecklistItemResponse>(`/api/checklist-items/${itemId}`, data).then((r) => r.data);
+
+export const deleteChecklistItem = (itemId: number): Promise<void> =>
+  apiClient.delete(`/api/checklist-items/${itemId}`).then(() => undefined);
+
+// Label API
+export const fetchLabels = (): Promise<LabelResponse[]> =>
+  apiClient.get<LabelResponse[]>('/api/labels').then((r) => r.data);
+
+export const addLabelToCard = (cardId: number, labelId: number): Promise<CardResponse> =>
+  apiClient.post<CardResponse>(`/api/cards/${cardId}/labels/${labelId}`).then((r) => r.data);
+
+export const removeLabelFromCard = (cardId: number, labelId: number): Promise<void> =>
+  apiClient.delete(`/api/cards/${cardId}/labels/${labelId}`).then(() => undefined);
