@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { BoardColumnResponse, CardResponse, CreateCardRequest, MoveCardRequest, UpdateCardRequest } from '../types/api';
+import type { BoardColumnResponse, CardResponse, CreateCardRequest, CreateColumnRequest, MoveCardRequest, ReorderColumnsRequest, UpdateCardRequest, UpdateColumnRequest } from '../types/api';
 
 const apiClient = axios.create({
   baseURL: 'http://localhost:8080',
@@ -29,3 +29,15 @@ export const moveCard = (
 
 export const deleteCard = (cardId: number): Promise<void> =>
   apiClient.delete(`/api/cards/${cardId}`).then(() => undefined);
+
+export const createColumn = (data: CreateColumnRequest): Promise<BoardColumnResponse> =>
+  apiClient.post<BoardColumnResponse>('/api/columns', data).then((r) => r.data);
+
+export const updateColumn = (id: number, data: UpdateColumnRequest): Promise<BoardColumnResponse> =>
+  apiClient.put<BoardColumnResponse>(`/api/columns/${id}`, data).then((r) => r.data);
+
+export const deleteColumn = (id: number): Promise<void> =>
+  apiClient.delete(`/api/columns/${id}`).then(() => undefined);
+
+export const reorderColumns = (data: ReorderColumnsRequest): Promise<BoardColumnResponse[]> =>
+  apiClient.put<BoardColumnResponse[]>('/api/columns/reorder', data).then((r) => r.data);
