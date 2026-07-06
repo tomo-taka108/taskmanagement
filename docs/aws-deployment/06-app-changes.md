@@ -11,7 +11,7 @@
 AWS上にデプロイすると、バックエンドのURLもフロントエンドが呼び出すAPIのURLも、
 ローカルとは全く異なるものになります。環境ごとに値を切り替えられるよう、設定を外部化する必要があります。
 
-## 1. CORS設定の環境変数化（バックエンド）
+## 1. CORS設定の緩和・環境変数化（バックエンド）
 
 **対象**: `backend/src/main/java/com/example/taskmanagement/config/WebConfig.java`
 
@@ -22,16 +22,14 @@ registry.addMapping("/api/**").allowedOrigins("http://localhost:5173")
         .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS").allowedHeaders("*").maxAge(3600);
 ```
 
-`http://localhost:5173`が固定で書かれているため、本番のCloudFrontドメイン（例: `https://d1234abcd.cloudfront.net`）
-からのアクセスはCORSエラーで拒否されてしまいます。
+今回の本番構成では、NginxがフロントエンドとバックエンドAPIの両方を同じオリジン（同じIP・同じポート80）で配信するため、
+**本番環境ではブラウザから見るとCORSは発生しません**（フロントエンドとAPIが同一オリジンになるため）。
 
-CORS（Cross-Origin Resource Sharing）とは、「あるオリジン（ドメイン）で動いているWebページから、
-別のオリジンのAPIを呼び出してよいか」をブラウザが確認する仕組みです。バックエンドが許可リストにないオリジンからの
-リクエストを拒否するのは、悪意あるサイトが勝手にAPIを呼び出すのを防ぐためのセキュリティ機構です。
-
-**変更方針**: `allowedOrigins`の値を`application.yml`のプロパティから読み込むようにし、
-ローカル開発用のCORS設定は`application.yml`のデフォルト値として残しつつ、本番環境ではECSタスク定義の環境変数
-`CORS_ALLOWED_ORIGINS`でCloudFrontのドメインを注入できるようにします。
+ただし、ローカル開発時（フロントエンド`localhost:5173` → バックエンド`localhost:8080`）は引き続き別オリジンなので、
+CORS設定自体は残します。`allowedOrigins`の値を`application.yml`のプロパティから読み込むようにし、
+ローカル開発用のCORS設定はデフォルト値として残しつつ、本番環境では環境変数`CORS_ALLOWED_ORIGINS`で
+上書きできるようにしておきます（将来的に構成を変えた場合の保険として環境変数化はしておきますが、
+今回のNginxリバースプロキシ構成では実質的に本番でCORSエラーが発生することはありません）。
 
 ## 2. APIクライアントのbaseURL環境変数化（フロントエンド）
 
@@ -46,22 +44,17 @@ const apiClient = axios.create({
 });
 ```
 
-本番ビルドでは、ALBのDNS名（例: `http://taskmanagement-alb-xxx.ap-northeast-1.elb.amazonaws.com`）を
-向く必要があります。しかし本番用に毎回コードを書き換えるのは非現実的です。
+本番ビルドでは、NginxがAPIリクエストをリバースプロキシするため、フロントエンドは**相対パス（`/api`）でリクエストするだけでよく**、
+バックエンドのホスト名やポートを意識する必要がありません。
 
-**変更方針**: Viteのビルド時環境変数機能（`import.meta.env`）を使い、`VITE_API_BASE_URL`という環境変数から
-baseURLを取得するように変更します。この環境変数は、`.env.production`ファイル（`npm run build`時に読み込まれる）
-に本番用のALB URLを設定することで注入します。ローカル開発時は`.env.production`が存在しない・設定されていなければ、
-従来通り`http://localhost:8080`にフォールバックします。
-
-Viteでは`VITE_`という接頭辞がついた環境変数のみ、ビルド後のフロントエンドコードから参照できる仕様になっています
-（それ以外の環境変数は、意図せずビルド成果物に埋め込まれて公開されるのを防ぐため除外されます）。
+**変更方針**: Viteのビルド時環境変数機能（`import.meta.env`）を使い、`VITE_API_BASE_URL`という環境変数からbaseURLを取得するように変更します。
+ローカル開発時は`http://localhost:8080`にフォールバックし、本番用の`.env.production`では空文字列（相対パス扱い）を設定します。
 
 ## 3. Dockerfileの新規作成（バックエンド）
 
 **対象**: `backend/Dockerfile`（新規）
 
-現状、バックエンドをコンテナ化する設定が存在しません。ECS Fargateで実行するには、
+現状、バックエンドをコンテナ化する設定が存在しません。EC2上でDocker Composeにより実行するには、
 Dockerイメージとしてビルドできる必要があります。
 
 **変更方針**: マルチステージビルドで、以下の2段階に分けます。
@@ -70,14 +63,33 @@ Dockerイメージとしてビルドできる必要があります。
 2. **実行ステージ**: JRE（実行環境のみ、開発ツール類を含まない軽量イメージ）上に、ビルドステージで生成したJARファイルだけをコピー
 
 2段階に分ける理由は、最終的なイメージサイズを小さくするためです。ビルドに必要なツール（Gradle本体、ソースコードなど）は
-実行時には不要なので、実行用イメージには含めません。イメージが小さいほど、ECRへのpush・ECS上でのpull・起動が高速になります。
+実行時には不要なので、実行用イメージには含めません。イメージが小さいほど、`t3.micro`という限られたリソースのEC2上でも
+ビルド・起動が軽くなります。
 
 **検証が必要な点**: このプロジェクトはJava 25のtoolchainを使用しています（`backend/build.gradle.kts`）。
 Java 25は非常に新しいバージョンのため、実装時に`eclipse-temurin`等の公式Dockerイメージで
 対応タグが存在するか確認が必要です。存在しない場合は、Gradle toolchain機能でビルド時にJDK 25を自動ダウンロードさせつつ、
 ベースイメージ自体は入手可能なLTSバージョン（JDK 21等）にする代替案を検討します。
 
-## 4. Vite環境変数の型定義追加
+## 4. docker-compose.ymlの新規作成
+
+**対象**: `docker-compose.yml`（新規、リポジトリルート）
+
+EC2上で`backend`コンテナと`nginx`コンテナをまとめて起動・管理するための定義ファイルです。
+
+- `backend`: `backend/Dockerfile`からビルド。RDSの接続情報（`DB_URL`、`DB_USERNAME`、`DB_PASSWORD`）を環境変数（`.env`ファイル）から注入。8080番ポートはコンテナ間ネットワークのみに公開し、ホストOSには公開しない
+- `nginx`: 公式`nginx`イメージをベースに、フロントエンドのビルド成果物と`nginx/nginx.conf`をマウント。80番ポートをホストOS（EC2）に公開
+
+## 5. Nginx設定の新規作成
+
+**対象**: `nginx/nginx.conf`（新規）
+
+フロントエンドの静的ファイル配信とバックエンドAPIへのリバースプロキシを1つの設定にまとめます。
+
+- `location /`: フロントエンドの静的ファイル（`frontend-dist`）を配信。SPA（Single Page Application）のため、存在しないパスへのアクセスは`index.html`にフォールバックする設定（`try_files ... /index.html`）を入れる
+- `location /api/`: `backend`コンテナ（`http://backend:8080`）へリバースプロキシ
+
+## 6. Vite環境変数の型定義追加
 
 **対象**: `frontend/src/vite-env.d.ts`（新規）
 
