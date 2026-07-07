@@ -50,7 +50,9 @@ Terraformで作ったものはコマンド一発で綺麗に消せます。
 
 ## 3. 全体アーキテクチャ
 
-今回構築する構成の全体像です。
+今回構築する構成の全体像です。**個人利用・認証なし**という前提のもと、無料利用枠に収まることを最優先し、
+一般的なWebアプリ構成（ALB、ECS Fargate、S3+CloudFront等）はあえて採用せず、
+**EC2インスタンス1台に集約したシンプルな構成**にしています。
 
 ```mermaid
 flowchart TB
@@ -59,42 +61,36 @@ flowchart TB
     end
 
     subgraph AWS["AWSアカウント（ap-northeast-1 東京リージョン）"]
-        CF["CloudFront<br/>（CDN・HTTPS窓口）"]
-        S3["S3バケット<br/>（フロントエンドの静的ファイル）"]
-
         subgraph VPC["VPC（10.0.0.0/16）"]
-            subgraph Public["パブリックサブネット"]
-                ALB["ALB<br/>（ロードバランサー）"]
-                ECS["ECS Fargateタスク<br/>（Spring Bootコンテナ）"]
+            subgraph Public["パブリックサブネット（2つ、異なるAZ）"]
+                EC2["EC2インスタンス（t3.micro）<br/>Nginx + Spring Bootコンテナ<br/>（Docker Compose）"]
             end
-            subgraph Private["プライベートサブネット（NATなし）"]
-                RDS["RDS PostgreSQL"]
+            subgraph Private["プライベートサブネット（2つ、異なるAZ / NATなし）"]
+                RDS["RDS PostgreSQL<br/>（db.t4g.micro）"]
             end
         end
-
-        ECR["ECR<br/>（Dockerイメージ保管庫）"]
     end
 
-    User -->|"HTTPS"| CF
-    CF -->|"静的ファイル取得"| S3
-    User -->|"HTTP（API呼び出し）"| ALB
-    ALB --> ECS
-    ECS -->|"5432番ポートのみ"| RDS
-    ECS -.->|"イメージpull"| ECR
+    User -->|"HTTP"| EC2
+    EC2 -->|"5432番ポートのみ"| RDS
 ```
 
-- **フロントエンド**（React）: ビルドした静的ファイル（HTML/CSS/JS）をS3に置き、CloudFrontで世界中に配信
-- **バックエンド**（Spring Boot）: Dockerコンテナ化してECR（イメージ置き場）に保存し、ECS Fargateで実行
-- **データベース**: RDS（マネージドPostgreSQL）。外部から直接繋がせず、バックエンドからのみアクセス可能にする
-- **ALB**（Application Load Balancer）: バックエンドへの入口。将来的に複数台に増やすときの振り分け役にもなる
+- **フロントエンド**（React）: ビルドした静的ファイル（HTML/CSS/JS）をEC2上のNginxコンテナが直接配信
+- **バックエンド**（Spring Boot）: Dockerコンテナ化し、同じEC2上でDocker Composeにより実行。NginxがリバースプロキシとしてAPIリクエストを振り分ける
+- **データベース**: RDS（マネージドPostgreSQL）。外部から直接繋がせず、EC2からのみアクセス可能にする
+
+ALB・ECS Fargate・ECR・S3・CloudFrontは使いません。理由は「4. 今回のコスト方針」で説明します。
 
 ## 4. 今回のコスト方針
 
-学習目的なので、**お金をかけすぎない**ことを最優先します。具体的には以下の工夫をしています。
+個人利用・認証なしのアプリであり、**お金をかけすぎない**ことを最優先します。具体的には以下の工夫をしています。
 
-- NAT Gateway（月$30以上する高額なリソース）を使わない構成にする
-- Fargate Spot（通常より約70%安い）を使う
-- 独自ドメイン・HTTPS証明書（ACM）は使わず、AWSが自動発行するURLで済ませる
+- **ALBを使わない**: ALBは起動しているだけで月$16〜17かかり、今回の構成で最もコストが高くなる要因のため廃止。EC2に直接アクセスする構成にする
+- **ECS Fargateを使わない**: EC2 1台（`t3.micro`）に集約することで、AWS無料利用枠（新規アカウントから12ヶ月間、`t2.micro`または`t3.micro`が750時間/月無料）の対象にする
+- **S3 + CloudFrontを使わない**: フロントエンドの静的ファイルもEC2上のNginxで配信し、CDN・追加のストレージ費用を発生させない
+- **NAT Gateway（月$30以上する高額なリソース）を使わない構成にする**
+- RDSは`db.t4g.micro`を使い、無料利用枠（750時間/月、12ヶ月間）の対象にする
+- 独自ドメイン・HTTPS証明書（ACM）は使わず、HTTPのみで済ませる
 - **使わないときは`terraform destroy`で全部消す**運用を前提にする
 
 詳しいコスト試算は `07-cost-management.md` で解説します。
@@ -111,12 +107,10 @@ flowchart TB
 | IAM Identity Center | AWSへのログイン・権限管理の仕組み（旧AWS SSO） |
 | VPC | AWS上に作る「自分専用の仮想ネットワーク」 |
 | サブネット | VPCの中をさらに区切った小さな区画 |
-| ECS / Fargate | Dockerコンテナを実行するための基盤（サーバー管理不要） |
-| ECR | Dockerイメージを保管する倉庫 |
+| EC2 | 仮想サーバー1台を借りられるサービス。今回はこの1台にDockerでフロント・バックエンドをまとめて動かす |
+| Docker / Docker Compose | アプリを「コンテナ」という単位で動かす仕組み。Composeは複数コンテナ（Nginx・Spring Boot）をまとめて起動・管理するツール |
 | RDS | マネージドなデータベース（PostgreSQLなどをAWSが運用してくれる） |
-| ALB | 通信を受け取って適切なコンテナに振り分ける負荷分散装置 |
-| S3 | ファイルを保存しておく倉庫サービス |
-| CloudFront | 世界中に速く配信するためのCDN（配信網） |
+| Nginx | Webサーバー・リバースプロキシ。今回はフロントの静的ファイル配信とバックエンドAPIへの振り分けを担当 |
 
 ---
 

@@ -1,9 +1,9 @@
 # 05. 実際のデプロイ手順
 
 **注意: このドキュメントに書かれたコマンドは、まだTerraformコード（`infra/`ディレクトリ）が
-実装されていない段階での「今後の流れの説明」です。** `infra/`ディレクトリと`backend/Dockerfile`が
-実装された後に、実際にこの手順でデプロイを行います。実装が完了したら、このファイルの内容と
-実際のファイル構成に相違がないか合わせて確認してください。
+実装されていない段階での「今後の流れの説明」です。** `infra/`ディレクトリと`backend/Dockerfile`・
+`docker-compose.yml`・`nginx/`設定が実装された後に、実際にこの手順でデプロイを行います。実装が完了したら、
+このファイルの内容と実際のファイル構成に相違がないか合わせて確認してください。
 
 `terraform apply`はAWS上に実際にリソースを作成し、課金が発生します。
 **必ず内容を理解した上で、自分の意思で実行してください。**
@@ -13,110 +13,107 @@
 ## 全体の流れ
 
 ```
-1. ECRリポジトリだけ先にterraform applyで作る
-2. バックエンドのDockerイメージをbuildしてECRにpush
-3. 残りのインフラ（VPC/RDS/ALB/ECS/S3/CloudFront）をterraform apply
-4. terraform outputでALBのURLを取得
-5. フロントエンドの環境変数にALBのURLを設定してビルド
-6. S3にフロントエンドの成果物をアップロード
-7. CloudFrontのキャッシュを無効化
+1. インフラ（VPC/EC2/RDS/セキュリティグループ）をterraform apply
+2. terraform outputでEC2のパブリックIPとRDSのエンドポイントを取得
+3. フロントエンドをビルド（APIのベースURLをEC2のIPに向ける）
+4. フロントエンドの成果物・バックエンドのソース・docker-compose.ymlをEC2にscpで転送
+5. EC2にSSHでログインし、docker compose upでコンテナを起動
+6. ブラウザでEC2のパブリックIPにアクセスして動作確認
 ```
 
-なぜECRだけ先に作るかというと、ECSのタスク定義が「ECR上にイメージが存在すること」を前提にしているためです。
-イメージが存在しない状態でECSサービスを作ろうとすると、タスクの起動に失敗します。
+ECR・ECSを使わないため、Dockerイメージをビルドしてレジストリにpushする工程はありません。
+代わりに、ソースコード一式をEC2に転送し、**EC2上で直接`docker compose build`する**方式を取ります
+（個人利用でビルド頻度が低いため、レジストリを経由するメリットよりシンプルさを優先しています）。
 
-## ステップ1: ECRリポジトリを先に作る
+## ステップ1: インフラを構築
 
 ```powershell
 cd infra/envs/dev
 terraform init
-terraform apply -target=aws_ecr_repository.backend
-```
-
-`-target`オプションで、特定のリソースだけを先に作ることができます。
-
-## ステップ2: バックエンドのDockerイメージをビルド・push
-
-```powershell
-# ECRのリポジトリURLを確認
-terraform output ecr_repository_url
-
-# ECRへのDockerログイン
-aws ecr get-login-password --profile taskmanagement --region ap-northeast-1 | `
-  docker login --username AWS --password-stdin <アカウントID>.dkr.ecr.ap-northeast-1.amazonaws.com
-
-# イメージをビルド
-docker build -t taskmanagement-backend ./backend
-
-# ECRのURL形式にタグ付け
-docker tag taskmanagement-backend:latest <ECRリポジトリURL>:latest
-
-# push
-docker push <ECRリポジトリURL>:latest
-```
-
-## ステップ3: 残りのインフラを構築
-
-```powershell
 terraform plan
 terraform apply
 ```
 
-`plan`の出力で、作成されるリソース一覧（VPC、サブネット、RDS、ALB、ECSサービスなど）を確認してから`apply`を実行し、
+`plan`の出力で、作成されるリソース一覧（VPC、サブネット、EC2、RDS、セキュリティグループなど）を確認してから`apply`を実行し、
 `yes`と入力して実行します。RDSの作成には数分かかることがあります。
 
-## ステップ4: バックエンドのURLを取得
+## ステップ2: EC2のIPとRDSのエンドポイントを取得
 
 ```powershell
-terraform output alb_dns_name
+terraform output ec2_public_ip
+terraform output rds_endpoint
 ```
 
-出力されたDNS名（例: `taskmanagement-alb-123456789.ap-northeast-1.elb.amazonaws.com`）が、
-バックエンドAPIのベースURLになります。ブラウザで `http://<このDNS名>/actuator/health` にアクセスし、
-`{"status":"UP"}` のような応答が返ってくれば、バックエンドは正常に起動しています。
+出力されたパブリックIP（例: `54.123.45.67`）が、これ以降のSSH接続・ブラウザアクセス先になります。
 
-## ステップ5: フロントエンドをビルド
+## ステップ3: フロントエンドをビルド
 
 ```powershell
 cd ../../../frontend
-echo "VITE_API_BASE_URL=http://<ALBのDNS名>" > .env.production
+echo "VITE_API_BASE_URL=http://<EC2のパブリックIP>" > .env.production
 npm run build
 ```
 
-## ステップ6: S3にアップロード
+## ステップ4: EC2にファイルを転送
+
+Terraformで作成したキーペア（`.pem`ファイル）を使ってSCPで転送します。
 
 ```powershell
-terraform -chdir=../infra/envs/dev output s3_bucket_name
-aws s3 sync ./dist s3://<バケット名> --delete --profile taskmanagement
+# フロントエンドのビルド成果物
+scp -i ./taskmanagement-key.pem -r ./dist ec2-user@<EC2のパブリックIP>:~/frontend-dist
+
+# バックエンドのソース一式（Dockerfileを含む）
+scp -i ./taskmanagement-key.pem -r ../backend ec2-user@<EC2のパブリックIP>:~/backend
+
+# docker-compose.ymlとnginx設定
+scp -i ./taskmanagement-key.pem ../docker-compose.yml ec2-user@<EC2のパブリックIP>:~/
+scp -i ./taskmanagement-key.pem -r ../nginx ec2-user@<EC2のパブリックIP>:~/nginx
 ```
 
-`--delete`オプションにより、S3側にあってローカルの`dist`にないファイル（古いビルドの残骸）は削除されます。
-
-## ステップ7: CloudFrontのキャッシュを無効化
-
-CloudFrontは配信を高速化するためにファイルをキャッシュしているため、新しいビルドをアップロードしても
-すぐには反映されません。キャッシュを明示的に無効化(invalidate)する必要があります。
+## ステップ5: EC2にSSHでログインし、コンテナを起動
 
 ```powershell
-terraform -chdir=../infra/envs/dev output cloudfront_distribution_id
-aws cloudfront create-invalidation --distribution-id <ディストリビューションID> --paths "/*" --profile taskmanagement
+ssh -i ./taskmanagement-key.pem ec2-user@<EC2のパブリックIP>
 ```
 
-## ステップ8: 動作確認
+ログイン後、EC2インスタンス上で以下を実行します。
 
-```powershell
-terraform -chdir=infra/envs/dev output cloudfront_domain_name
+```bash
+# RDSのエンドポイントなどをまとめた.envファイルを作成（初回のみ）
+cat <<EOF > .env
+DB_URL=jdbc:postgresql://<RDSエンドポイント>:5432/taskmanagement
+DB_USERNAME=<マスターユーザー名>
+DB_PASSWORD=<マスターパスワード>
+EOF
+
+# コンテナをビルドして起動
+docker compose up -d --build
 ```
 
-出力されたドメイン（例: `d1234abcd.cloudfront.net`）にブラウザでアクセスし、アプリが表示されることを確認します。
+`docker-compose.yml`は以下の2サービスを定義する想定です。
+
+- `backend`: `backend/Dockerfile`からビルドしたSpring Bootコンテナ。8080番ポートは外部公開せず、Nginxコンテナからのみアクセス
+- `nginx`: フロントエンドの静的ファイル（`frontend-dist`）を配信し、`/api`宛のリクエストを`backend`コンテナにリバースプロキシ。80番ポートを外部公開
+
+## ステップ6: 動作確認
+
+ブラウザで `http://<EC2のパブリックIP>/actuator/health` にアクセスし、
+`{"status":"UP"}` のような応答が返ってくれば、バックエンドは正常に起動しています。
+
+続けて `http://<EC2のパブリックIP>/` にアクセスし、フロントエンドの画面が表示されることを確認します。
 
 ---
 
 ## 更新時の再デプロイ
 
-コードを変更した場合、バックエンドは ステップ2→3（`terraform apply`は変更があった場合のみ）、
-フロントエンドはステップ5〜7を繰り返せば反映されます。インフラ構成自体（VPCやRDSなど）を変えていない限り、
-`terraform apply`は差分がなければ何もしません。
+コードを変更した場合、ステップ3〜5（該当する部分のみ）を繰り返します。
+
+```bash
+# EC2上で再ビルド・再起動
+docker compose up -d --build
+```
+
+インフラ構成自体（VPCやRDSなど）を変えていない限り、`terraform apply`は差分がなければ何もしません。
 
 ## 全部消したいとき
 
@@ -125,12 +122,7 @@ cd infra/envs/dev
 terraform destroy
 ```
 
-S3バケットの中身が残っていると削除に失敗することがあるため、その場合は先にバケットを空にしてから再実行します。
-
-```powershell
-aws s3 rm s3://<バケット名> --recursive --profile taskmanagement
-terraform destroy
-```
+EC2インスタンスとRDSインスタンスが削除されます。RDSは削除保護を無効化している想定なので、追加の手動操作は不要です。
 
 ---
 
