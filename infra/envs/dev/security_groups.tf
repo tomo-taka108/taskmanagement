@@ -1,6 +1,6 @@
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-ec2-sg"
-  description = "EC2インスタンス用（HTTP全許可、SSHは自分のIPのみ許可）"
+  description = "For EC2 instance (allow HTTP from anywhere, SSH from own IP only)"
   vpc_id      = aws_vpc.main.id
 
   ingress {
