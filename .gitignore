@@ -3,3 +3,15 @@
 
 # ローカル起動時のログファイル
 *.log
+
+# Terraform
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfvars
+!infra/**/*.tfvars.example
+infra/**/crash.log
+infra/**/crash.*.log
+
+# SSH秘密鍵（Terraformで生成）
+infra/**/*.pem

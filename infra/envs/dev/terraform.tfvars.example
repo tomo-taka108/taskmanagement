@@ -1,0 +1,8 @@
+# このファイルをコピーして terraform.tfvars を作成し、実際の値を設定してください。
+# terraform.tfvars は .gitignore 対象のため、コミットされません。
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+# SSH接続を許可する自分のグローバルIPアドレス（CIDR形式、末尾に /32 を付ける）
+# 確認方法: https://checkip.amazonaws.com などで自分のグローバルIPを調べる
+my_ip_cidr = "YOUR_IP_ADDRESS/32"
