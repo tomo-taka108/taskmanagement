@@ -22,3 +22,18 @@ output "public_subnet_ids" {
   description = "パブリックサブネットID一覧"
   value       = aws_subnet.public[*].id
 }
+
+output "private_subnet_ids" {
+  description = "プライベートサブネットID一覧"
+  value       = aws_subnet.private[*].id
+}
+
+output "rds_endpoint" {
+  description = "RDSのエンドポイント（ホスト名:ポート）"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "rds_address" {
+  description = "RDSのホスト名（ポートなし）"
+  value       = aws_db_instance.main.address
+}

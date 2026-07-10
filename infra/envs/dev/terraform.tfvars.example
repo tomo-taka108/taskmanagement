@@ -6,3 +6,6 @@
 # SSH接続を許可する自分のグローバルIPアドレス（CIDR形式、末尾に /32 を付ける）
 # 確認方法: https://checkip.amazonaws.com などで自分のグローバルIPを調べる
 my_ip_cidr = "YOUR_IP_ADDRESS/32"
+
+# RDSのマスターパスワード（8文字以上、自分で決めた強固なパスワードを設定）
+db_password = "YOUR_DB_PASSWORD"
