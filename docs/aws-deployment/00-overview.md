@@ -73,6 +73,9 @@ flowchart TB
 
     User -->|"HTTP"| EC2
     EC2 -->|"5432番ポートのみ"| RDS
+
+    linkStyle 0 stroke:#2b6cb0,stroke-width:2px
+    linkStyle 1 stroke:#c05621,stroke-width:2px
 ```
 
 - **フロントエンド**（React）: ビルドした静的ファイル（HTML/CSS/JS）をEC2上のNginxコンテナが直接配信
