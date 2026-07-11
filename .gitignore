@@ -15,3 +15,6 @@ infra/**/crash.*.log
 
 # SSH秘密鍵（Terraformで生成）
 infra/**/*.pem
+
+# DBバックアップ（データを含むためGitHubに上げない）
+*.dump
