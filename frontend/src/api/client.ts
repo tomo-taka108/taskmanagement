@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { BoardColumnResponse, CardResponse, ChecklistItemResponse, CreateCardRequest, CreateColumnRequest, LabelResponse, MoveCardRequest, ReorderColumnsRequest, UpdateCardRequest, UpdateColumnRequest } from '../types/api';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080',
   headers: { 'Content-Type': 'application/json' },
 });
 

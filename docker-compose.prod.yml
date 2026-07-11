@@ -1,5 +1,6 @@
 services:
   backend:
+    image: taskmanagement-backend:latest
     build:
       context: ./backend
     container_name: taskmanagement-backend
